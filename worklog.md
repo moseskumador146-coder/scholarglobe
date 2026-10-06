@@ -38,3 +38,25 @@ Stage Summary:
 - Deliverable: runnable Next.js app on port 3000 (single / route); server is (re)started by platform boot script (note: sandbox kills agent-spawned servers between tool calls — verification was done in single-call runs; platform restarts dev server at session boot)
 - Data: 89 opportunities (44 unis ALL ≤$30 to apply, 45 scholarships), 47 uni↔scholarship links, 40 filterable pairs
 - Key files: prisma/schema.prisma, src/lib/seed-{unis-europe-1,unis-europe-2,unis-world-1,unis-world-2,extra-scholarships,links}.ts, scripts/seed.ts, src/app/api/{opportunities,stats,deep-search}/route.ts, src/components/{opportunity-card,pair-card}.tsx, src/app/page.tsx
+
+---
+Task ID: 3
+Agent: Super Z (main agent)
+Task: (a) Build full Apply Co-Pilot (50-50 apply-together: doc vault, wizard, kits, email autopilot with BOTH email types + chooser); (b) UI overhaul — vibrant light/dark themes, animations, mobile-first fixes; (c) hyper-realistic 3D globes; (d) triple-check everything.
+
+Work Log:
+- Design system rebuilt: oklch token palettes (light: white+indigo glow / dark: rich navy #0d1126+glowing indigo-violet-fuchsia), .text-gradient(-animated), reveal-on-scroll, floating orbs, lift/glow/shimmer/ping animations, themed scrollbar, prefers-reduced-motion respected; next-themes ThemeProvider + animated ThemeToggle (dark default)
+- Apply Co-Pilot data layer (src/lib/copilot-store.ts): localStorage (profile/apps/prefs, hydration-safe mount-then-load via useSyncExternalStore) + IndexedDB vault for file Blobs (15MB cap); requiredDocs(op) derives each programme's REAL doc checklist (unofficial-transcript policy, MOI cert vs IELTS, referee counts, fee-waiver evidence); wizardQuestions(op) generates paste-ready answer prompts; per-app snapshots of reqDocs/wizardQs stored at add time
+- Email Autopilot (src/lib/email-templates.ts): 7 templates in student's voice (referee request, fee waiver, MOI/English waiver, missing-doc question, status follow-up, transcript request, deferral) + 4 send routes: mailto: (own mail app), Gmail compose, Outlook compose, copy-to-clipboard; EmailSendDialog asks which one EVERY time (last choice pre-selected + remember switch) — user always presses final send
+- New API /api/essay: AI motivation-letter + portal-answer drafting via z-ai-web-dev-sdk chat.completions (cached 30min, fails soft)
+- Co-pilot UI (5 tabs): Overview (stat cards, next-deadline countdowns, 50-50 explainer), Documents (drag&drop vault, per-app coverage bars), Wizard (profile interview 0-100% + per-app answers with AI draft + copy), Kits (status stepper planned→decision, doc checklist from real rules, deadline badges, AI motivation letter per app, notes, one-tap waiver/MOI/follow-up emails), Emails (7 kinds + live preview); every OpportunityCard & PairCard got "＋ Co-Pilot" add buttons (deduped)
+- Realistic globes: earth-blue-marble (light) / earth-night city lights (dark) + earth-topology bump relief + earth-water specular ocean shimmer + night-sky 4096px starfield + atmosphere; 3 marker layers (glowing columns, pulsing sonar rings, always-visible flag+count country badges clickable to filter)
+- Page rebuilt mobile-first: glass header + mobile menu, 44px touch targets, h-11 selects, fixed prior horizontal-overflow class of bugs, semantic-token classes everywhere
+- Triple check: tsc clean; eslint clean; APIs verified (stats 89/71/44/45/47/35, Ghana→Europe 32 results+25 pairs, /api/essay live draft); agent-browser e2e on desktop 1440px + mobile 390px, both themes, full flow (search → add 2 apps → upload 2 docs → coverage 1/8+1/7 → profile fill → kit checklist → email chooser dialog), localStorage+IndexedDB persistence after reload, dev-issue overlay CLEAN, no console errors, no mobile overflow
+- Fixed 2 bugs found by verification: (1) hydration mismatch — copilot store read localStorage during first client render ("Kits 2" vs SSR "Kits"); switched to mount-then-load; (2) fee-waiver button condition referenced non-existent field on app snapshot
+
+Stage Summary:
+- Deliverable: runnable Next.js app on port 3000 (single / route), dev.log clean of app errors (only external 429s during testing, fail-soft), lint+types clean, zero hydration warnings
+- Data: 89 opportunities (44 unis all ≤$30 · 45 scholarships · 71 $0-fee · 47 uni↔scholarship links), now with per-application co-pilot kits
+- Privacy: all co-pilot data (profile, answers, docs) stays in browser localStorage/IndexedDB; nothing uploaded; no passwords stored (emails sent from user's own accounts)
+- Key new files: src/lib/{copilot-store,email-templates}.ts, src/app/api/essay/route.ts, src/components/{theme-provider,theme-toggle,reveal}.tsx, src/components/copilot/{apply-copilot,document-vault,application-wizard,submission-kits,email-center,email-send-dialog}.tsx, public/globe/{earth-topology,earth-water,night-sky}.*
