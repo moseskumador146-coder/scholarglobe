@@ -5,8 +5,9 @@
  * Tabs: Overview · Documents · Wizard · Submission Kits · Email Center
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { STATUS_META, useCopilot } from "@/lib/copilot-store";
@@ -14,10 +15,12 @@ import { ApplicationWizard } from "@/components/copilot/application-wizard";
 import { DocumentVault } from "@/components/copilot/document-vault";
 import { EmailCenter } from "@/components/copilot/email-center";
 import { SubmissionKits } from "@/components/copilot/submission-kits";
+import { CopilotBrowser } from "@/components/copilot/browser/copilot-browser";
 import { flagEmoji } from "@/components/opportunity-card";
 import {
   CalendarClock,
   FolderLock,
+  Globe2,
   Handshake,
   ListChecks,
   Mail,
@@ -27,6 +30,7 @@ import {
 
 export function ApplyCopilot() {
   const { apps, docs, profileCompletion } = useCopilot();
+  const [browserOpen, setBrowserOpen] = useState(false);
 
   const nextDeadlines = useMemo(
     () =>
@@ -68,6 +72,27 @@ export function ApplyCopilot() {
             </Card>
           ))}
         </div>
+
+        {/* Co-Pilot browser launch */}
+        <button
+          type="button"
+          onClick={() => setBrowserOpen(true)}
+          className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-transparent to-fuchsia-500/5 p-4 text-left transition hover:border-primary/50 hover:shadow-md"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md transition group-hover:scale-105">
+            <Globe2 className="h-5 w-5" />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-foreground">Open the Co-Pilot Browser</span>
+            <span className="block text-[11px] leading-snug text-muted-foreground">
+              A real browser with tabs, history and bookmarks built for applications — it reads each portal page, pre-fills
+              your details from the vault, and only interrupts you for CAPTCHAs, uploads, passwords and payments.
+            </span>
+          </span>
+          <span className="ml-auto hidden shrink-0 rounded-full bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground sm:block">
+            Launch →
+          </span>
+        </button>
 
         {/* next deadlines */}
         <Card className="mt-4">
@@ -125,6 +150,7 @@ export function ApplyCopilot() {
       <TabsContent value="wizard" className="mt-4"><ApplicationWizard /></TabsContent>
       <TabsContent value="kits" className="mt-4"><SubmissionKits /></TabsContent>
       <TabsContent value="emails" className="mt-4"><EmailCenter /></TabsContent>
+      <CopilotBrowser open={browserOpen} onOpenChange={setBrowserOpen} />
     </Tabs>
   );
 }

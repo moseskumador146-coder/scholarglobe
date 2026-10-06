@@ -47,7 +47,13 @@ const LEVELS = [
 
 const FIELDS = [
   { value: "any", label: "Any field" },
+  { value: "software engineering", label: "Software Engineering" },
   { value: "computer science", label: "Computer Science / IT" },
+  { value: "data & ai", label: "Data & AI" },
+  { value: "cybersecurity", label: "Cybersecurity" },
+  { value: "information technology", label: "Information Technology" },
+  { value: "communications & media", label: "Communications & Media" },
+  { value: "aviation & hospitality", label: "Aviation & Hospitality (cabin crew, airports)" },
   { value: "business & economics", label: "Business & Economics" },
   { value: "education", label: "Education" },
   { value: "agriculture & food", label: "Agriculture & Food" },
@@ -59,6 +65,16 @@ const FIELDS = [
   { value: "mathematics", label: "Mathematics / Data" },
   { value: "arts & humanities", label: "Arts & Humanities" },
   { value: "law", label: "Law" },
+];
+
+const AREA_CHIPS = [
+  { label: "✈️ Cabin crew / air hostess", field: "aviation & hospitality", q: "" },
+  { label: "🛫 Airports & ground ops", field: "aviation & hospitality", q: "airport" },
+  { label: "💻 Software engineering", field: "software engineering", q: "" },
+  { label: "🤖 Data & AI", field: "data & ai", q: "" },
+  { label: "🔐 Cybersecurity", field: "cybersecurity", q: "" },
+  { label: "📣 Communications & media", field: "communications & media", q: "" },
+  { label: "📊 Project management", field: "business & economics", q: "project" },
 ];
 
 interface WebResult {
@@ -132,7 +148,7 @@ export default function OnlinePage() {
       const d = await fetch("/api/deep-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ origin, level, field, mode: "online" }),
+        body: JSON.stringify({ origin, level, field, q, mode: "online" }),
       }).then((r) => r.json());
       setWebResults(d.results ?? []);
       setBriefing(d.synthesis ?? null);
@@ -142,6 +158,11 @@ export default function OnlinePage() {
     } finally {
       setWebBusy(false);
     }
+  };
+
+  const applyChip = (chip: { field: string; q: string }) => {
+    setField(chip.field);
+    setQ(chip.q);
   };
 
   return (
@@ -174,14 +195,30 @@ export default function OnlinePage() {
               {stats ? `${stats.online} curated free online offerings · ${stats.free} total $0-fee programs in the database` : "Curated & verified"} · no IELTS for most · study from anywhere
             </Badge>
             <h1 className="max-w-3xl text-3xl font-extrabold leading-[1.12] tracking-tight sm:text-4xl sm:leading-[1.08]">
-              Free <span className="text-gradient-animated">online degrees, master&apos;s &amp; professional certificates</span> — study from home, pay nothing.
+              Free <span className="text-gradient-animated">online degrees, master&apos;s &amp; professional certificates</span> — from universities and accredited institutions employers respect.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              For students who need their first credentials from home: tuition-free accredited online universities
-              (University of the People, IOU, IGNOU, UVS), free professional certificates that employers recognize
-              (Google, IBM, Cisco, Microsoft, FAO, SAP, UN) and aid paths that make paid certificates free. Every entry
-              shows exactly what is free — the learning, the certificate, or both.
+              Harvard CS50, MITx, University of Michigan and Illinois certificates · IATA aviation training (cabin
+              crew/air hostess, airport operations) · software engineering, data &amp; AI, cybersecurity, communications,
+              project management · tuition-free accredited online universities (University of the People, IOU, IGNOU, UVS).
+              Every entry shows exactly what is free — the learning, the certificate, or the financial-aid path that makes it free.
             </p>
+            <div className="mt-5 flex flex-wrap gap-1.5">
+              {AREA_CHIPS.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => applyChip(chip)}
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
+                    field === chip.field && q === chip.q
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                      : "border-border bg-card text-foreground hover:border-primary/50 hover:text-primary"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 

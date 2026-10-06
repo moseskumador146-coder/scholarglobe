@@ -155,6 +155,40 @@ export interface CopilotPrefs {
   emailMode: EmailMode;
 }
 
+// ── Co-Pilot Browser: history & bookmarks (localStorage) ─────────────
+
+const HISTORY_KEY = "sg-copilot-history";
+const BOOKMARKS_KEY = "sg-copilot-bookmarks";
+
+export interface BrowserHistoryItem {
+  url: string;
+  title: string;
+  at: string;
+}
+
+export interface BrowserBookmark {
+  id: string;
+  url: string;
+  title: string;
+  addedAt: string;
+}
+
+export function readBrowserHistory(): BrowserHistoryItem[] {
+  return readLS<BrowserHistoryItem[]>(HISTORY_KEY, []).slice(0, 200);
+}
+
+export function writeBrowserHistory(items: BrowserHistoryItem[]) {
+  writeLS(HISTORY_KEY, items.slice(0, 200));
+}
+
+export function readBrowserBookmarks(): BrowserBookmark[] {
+  return readLS<BrowserBookmark[]>(BOOKMARKS_KEY, []);
+}
+
+export function writeBrowserBookmarks(items: BrowserBookmark[]) {
+  writeLS(BOOKMARKS_KEY, items);
+}
+
 // ── localStorage state ───────────────────────────────────────────────
 
 const PROFILE_KEY = "sg-copilot-profile";
@@ -446,6 +480,8 @@ export function useCopilot() {
       setProfileState(readLS<CopilotProfile>(PROFILE_KEY, EMPTY_PROFILE));
       setAppsState(readLS<CopilotApplication[]>(APPS_KEY, []));
       setPrefsState(readLS<CopilotPrefs>(PREFS_KEY, { emailMode: "ask" }));
+      setBrowserHistory(readBrowserHistory());
+      setBrowserBookmarks(readBrowserBookmarks());
     };
     sync();
     listeners.add(sync);
@@ -572,6 +608,42 @@ export function useCopilot() {
     URL.revokeObjectURL(url);
   }, []);
 
+  // ── Co-Pilot Browser: history & bookmarks ──
+  const [browserHistory, setBrowserHistory] = useState<BrowserHistoryItem[]>([]);
+  const [browserBookmarks, setBrowserBookmarks] = useState<BrowserBookmark[]>([]);
+
+  const pushBrowserHistory = useCallback((url: string, title: string) => {
+    if (!url || !url.startsWith("http")) return;
+    const items = readBrowserHistory();
+    if (items[0]?.url === url) return;
+    writeBrowserHistory([{ url, title, at: new Date().toISOString() }, ...items.filter((i) => i.url !== url)]);
+    setBrowserHistory(readBrowserHistory());
+    emit();
+  }, []);
+
+  const clearBrowserHistory = useCallback(() => {
+    writeBrowserHistory([]);
+    setBrowserHistory([]);
+    emit();
+  }, []);
+
+  const addBrowserBookmark = useCallback((url: string, title: string) => {
+    const items = readBrowserBookmarks();
+    if (items.some((b) => b.url === url)) return;
+    writeBrowserBookmarks([
+      { id: `bm-${Date.now()}`, url, title: title || url, addedAt: new Date().toISOString() },
+      ...items,
+    ]);
+    setBrowserBookmarks(readBrowserBookmarks());
+    emit();
+  }, []);
+
+  const removeBrowserBookmark = useCallback((id: string) => {
+    writeBrowserBookmarks(readBrowserBookmarks().filter((b) => b.id !== id));
+    setBrowserBookmarks(readBrowserBookmarks());
+    emit();
+  }, []);
+
   const profileCompletion = (() => {
     const keys: (keyof CopilotProfile)[] = [
       "fullName", "email", "phone", "nationality", "dob", "highestDegree",
@@ -595,5 +667,11 @@ export function useCopilot() {
     removeDoc,
     downloadDoc,
     profileCompletion,
+    browserHistory,
+    pushBrowserHistory,
+    clearBrowserHistory,
+    browserBookmarks,
+    addBrowserBookmark,
+    removeBrowserBookmark,
   };
 }
