@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -182,7 +182,7 @@ function buildBank(profile: Record<string, unknown>, app: CopilotApplication | u
   const bank: BankEntry[] = [
     { key: "firstName", label: "First name", value: parts[0] ?? "", re: /first[\s_-]?name|given[\s_-]?name|forename/i },
     { key: "lastName", label: "Last name", value: parts.slice(1).join(" "), re: /last[\s_-]?name|sur[\s_-]?name|family[\s_-]?name/i },
-    { key: "fullName", label: "Full name", value: full, re: /full[\s_-]?name|^\s*name[\s_*:]|$^applicant|candidate[\s_-]?name|^name$/i },
+    { key: "fullName", label: "Full name", value: full, re: /full[\s_-]?name|^name\b(?!\s+(of|your|and|the)\b)|applicant[\s_-]?name|candidate[\s_-]?name|customer[\s_-]?name|student[\s_-]?name/i },
     { key: "email", label: "Email", value: String(profile.email ?? ""), re: /e[\s_-]?mail/i },
     { key: "phone", label: "Phone", value: String(profile.phone ?? ""), re: /phone|mobile|tel\b|whatsapp|contact[\s_-]?number/i },
     { key: "dob", label: "Date of birth", value: String(profile.dob ?? ""), re: /birth|\bdob\b|d\.o\.b/i },
@@ -495,7 +495,6 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, pushBrowserHistory]);
 
   // ── autofill ──
@@ -683,6 +682,7 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
         className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
         aria-describedby={undefined}
       >
+        <DialogTitle className="sr-only">Co-Pilot Browser{appName ? ` — ${appName}` : ""}</DialogTitle>
         {/* ── tab strip ── */}
         <div className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-secondary/70 px-2">
           {tabs.map((t) => (
@@ -958,7 +958,7 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
                       </p>
                     )}
 
-                    {activeRead && (
+                    {active && activeRead && (
                       <>
                         <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
                           {activeRead.fields.length} field{activeRead.fields.length === 1 ? "" : "s"} found · {hostOf(activeRead.url)}

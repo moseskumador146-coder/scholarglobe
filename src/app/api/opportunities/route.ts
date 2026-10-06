@@ -132,7 +132,7 @@ export async function GET(req: NextRequest) {
     if (level !== "all" && !r.levels.split(",").includes(level)) return false;
     if (field !== "any" && field !== "all") {
       const fields = r.fields.split("|").map((f) => f.trim().toLowerCase());
-      if (!fields.includes("any") && !fields.includes(field)) return false;
+      if (!fields.includes(field)) return false;
     }
     if (fee === "free" && !r.feeConfirmedFree) return false;
     if (fee === "low" && r.feeUsd > 30) return false;

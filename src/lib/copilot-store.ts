@@ -473,6 +473,9 @@ export function useCopilot() {
   const [profile, setProfileState] = useState<CopilotProfile>(EMPTY_PROFILE);
   const [apps, setAppsState] = useState<CopilotApplication[]>([]);
   const [prefs, setPrefsState] = useState<CopilotPrefs>({ emailMode: "ask" });
+  // ── Co-Pilot Browser: history & bookmarks ──
+  const [browserHistory, setBrowserHistory] = useState<BrowserHistoryItem[]>([]);
+  const [browserBookmarks, setBrowserBookmarks] = useState<BrowserBookmark[]>([]);
 
   // load persisted state once after mount, then keep every hook instance in sync
   useEffect(() => {
@@ -607,10 +610,6 @@ export function useCopilot() {
     a.click();
     URL.revokeObjectURL(url);
   }, []);
-
-  // ── Co-Pilot Browser: history & bookmarks ──
-  const [browserHistory, setBrowserHistory] = useState<BrowserHistoryItem[]>([]);
-  const [browserBookmarks, setBrowserBookmarks] = useState<BrowserBookmark[]>([]);
 
   const pushBrowserHistory = useCallback((url: string, title: string) => {
     if (!url || !url.startsWith("http")) return;

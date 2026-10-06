@@ -87,3 +87,32 @@ Stage Summary:
 - Data: 112 opportunities — 44 universities (all ≤$30, 32 $0), 45 scholarships, 23 free online offerings (94 total $0-fee, 96 MOI-friendly, 47 uni↔scholarship links, 58 open/rolling); 26 stale URLs corrected with HTTP-verified replacements.
 - Co-Pilot: fully functional verified flow — add→vault upload→auto-checklist sync→Ready prompt→status stepper→wizard answers→AI essay→email chooser (4 modes, remembered preference); docs stay in localStorage/IndexedDB.
 - Key files: src/lib/seed-online.ts (new), src/app/online/page.tsx (new), scripts/check-urls.mjs + find-urls-2.mjs + compress-globe.py (new), src/components/copilot/{application-wizard,submission-kits,email-send-dialog}.tsx, src/lib/copilot-store.ts, src/components/globe-view.tsx, src/app/page.tsx, src/app/api/{opportunities,stats,deep-search}/route.ts, public/globe/* (compressed).
+
+---
+Task ID: 5
+Agent: Super Z (main agent)
+Task: (a) Complete the Co-Pilot Browser (user: "copilot work is 30%... launch a fully functional browser with tabs, history... read the screen, navigate, auto-fill from uploaded documents, only prompt for confirm/CAPTCHA"); (b) deep-search trusted certificates for software engineering, communications, aviation (airports, air hostess, cabin crew) from universities/accredited institutions; (c) triple-check everything.
+
+Work Log:
+- Audited the interrupted session's work: copilot-browser.tsx (1238 lines), /api/browse proxy (332 lines), /api/browse-assist AI (127 lines), /public/copilot-inject.js all present and wired into opportunity-card, submission-kits and apply-copilot — verified architecture: same-origin proxy (SSRF-guarded, per-tab cookie jars, HTML/CSS rewrite, CSP/XFO stripped, inject script for SPA-nav/new-tab interception), screen reader via contentDocument (fields, labels, selects, captcha/file/password/payment detection), instant-fill bank (17 profile keys with label-regex matching), AI smart-map + AI guide via /api/browse-assist (10-min cache, fail-soft), tabs/history/bookmarks persisted in localStorage.
+- Found the NEW certificates seed file (seed-certs.ts, 15 entries) was written but NEVER imported into the DB → ran scripts/seed.ts (upsert) → DB now 127 opportunities (34 CERTIFICATE incl. Harvard CS50x, freeCodeCamp, Odin Project, IATA Cabin Crew — air hostess, IATA Airport Operations, ISC2 CC cybersecurity, MITx MicroMasters, UMich Python, Meta Back-End, Google IT Automation/Digital Marketing/PM, Illinois Digital Marketing, WBG Open Learning, + 19 seed-online certs; 4 ONLINE_DEGREE; 44 unis; 45 scholarships). Stats API: 127 total / 105 free / 38 online.
+- FIXED 5 bugs found by triple-checking:
+  (1) copilot-store.ts: setBrowserHistory/setBrowserBookmarks used before declaration (react-hooks/immutability lint error) → moved useState declarations above the sync effect.
+  (2) copilot-browser.tsx TS18047 'active' possibly null in panel render → guarded {active && activeRead && (...)}.
+  (3) copilot-browser.tsx unused eslint-disable directive → removed.
+  (4) /api/opportunities field filter let every record tagged "any" pass ANY field filter → filter now exact-matches the selected field (software engineering: 6, aviation & hospitality: 2, communications & media: 4, cybersecurity: 1 — all precise).
+  (5) fullName fill regex contained a broken alternative ($^applicant) and missed "Customer name"/"Applicant name" → fixed to /full[\s_-]?name|^name\b(?!\s+(of|your|and|the)\b)|applicant|candidate|customer|student[\s_-]?name/i with false-positive guards for "Name of university"/"Name your referee".
+  (6) a11y: Co-Pilot Browser DialogContent lacked DialogTitle (console error) → added sr-only DialogTitle.
+- E2E verified with agent-browser (desktop 1280 + mobile 390, light+dark):
+  • home loads, example search 37 curated + 28 pairs tabs;
+  • Co-Pilot Browser opens from OpportunityCard "Open in Co-Pilot Browser" → iframe loads real external page (Commonwealth Master's Scholarships via cscuk.fcdo.gov.uk) same-origin through proxy;
+  • screen read detected 12 fields on httpbin.org/forms/post; Instant fill wrote phone +233 24 123 4567 and email kwame.mensah@example.com into the live form; AI smart map filled "Customer name" → "Kwame Mensah" (profile from localStorage);
+  • tabs: new-tab button, 3 tabs live; history persisted (sg-copilot-history), tab session restore (sg-copilot-browser-tabs); graceful proxy error page (Wikimedia 403 rendered as friendly error card with "open directly" escape);
+  • full kit journey: add app via card → Co-Pilot section → Kits tab → auto-expand → "Open portal in Co-Pilot Browser" → browser opens with 🎯 app context and loads the official portal;
+  • /api/browse-assist guide mode returns concrete "Do now / Needs you" guidance (verified live);
+  • /online: cabin-crew/air-hostess, airports, software-engineering chips present; field filters now precise; 3 globe canvases render on mobile 390px; no horizontal overflow; console CLEAN after DialogTitle fix (fresh load), tsc 0 src errors, eslint clean; dev.log clean.
+
+Stage Summary:
+- Deliverable: runnable Next.js app (port 3000), / and /online; Co-Pilot Browser fully functional (tabs/history/bookmarks, screen reading, instant+AI autofill, docs panel with download-to-upload, needs-you alerts for CAPTCHA/uploads/passwords/payments, per-tab login cookies, graceful failure for blocking sites); 127 curated opportunities incl. 34 trusted certificates (Harvard/MIT/UMich/Illinois/IATA/ISC2/Google/Meta/IBM/Cisco/Microsoft/AWS/World Bank).
+- Key files changed: src/lib/copilot-store.ts, src/components/copilot/browser/copilot-browser.tsx, src/app/api/opportunities/route.ts, db/custom.db (re-seeded 127).
+- Honest limits (by design): file uploads require the user to pick files (browser security), passwords/CAPTCHA/payments always need the user, sites with hard bot-protection show a friendly error page with a direct-escape link.
