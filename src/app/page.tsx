@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GlobeView, continentLegend, GlobePoint } from "@/components/globe-view";
 import { Opportunity, OpportunityCard, flagEmoji } from "@/components/opportunity-card";
+import { Pair, PairCard } from "@/components/pair-card";
 import {
   ArrowDown,
   CalendarClock,
@@ -100,6 +101,8 @@ interface WebResult {
   host_name: string;
   date?: string;
   favicon?: string;
+  feeMention?: boolean;
+  freeMention?: boolean;
 }
 
 interface Stats {
@@ -108,6 +111,10 @@ interface Stats {
   moi: number;
   universities: number;
   scholarships: number;
+  freeUnis: number;
+  lowFeeUnis: number;
+  linked: number;
+  openNow: number;
 }
 
 export default function Home() {
@@ -116,11 +123,13 @@ export default function Home() {
   const [level, setLevel] = useState("all");
   const [field, setField] = useState("any");
   const [q, setQ] = useState("");
-  const [freeOnly, setFreeOnly] = useState(true);
+  const [fee, setFee] = useState("low");
   const [moiOnly, setMoiOnly] = useState(false);
 
   const [results, setResults] = useState<Opportunity[]>([]);
+  const [pairs, setPairs] = useState<Pair[]>([]);
   const [webResults, setWebResults] = useState<WebResult[]>([]);
+  const [synthesis, setSynthesis] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [activeTab, setActiveTab] = useState("curated");
@@ -139,7 +148,7 @@ export default function Home() {
     fetch("/api/globe?type=universities").then((r) => r.json()).then((d) => setGlobeUnis(d.points ?? [])).catch(() => {});
     fetch("/api/globe?type=scholarships").then((r) => r.json()).then((d) => setGlobeSchol(d.points ?? [])).catch(() => {});
     fetch("/api/globe?type=status").then((r) => r.json()).then((d) => setGlobeStatus(d.points ?? [])).catch(() => {});
-    const base = "/api/opportunities?freeOnly=1";
+    const base = "/api/opportunities?fee=free";
     fetch(`${base}&status=OPEN`).then((r) => r.json()).then((d) => setOpenNow(d.results ?? [])).catch(() => {});
     fetch(`${base}&status=UPCOMING`).then((r) => r.json()).then((d) => setUpcoming(d.results ?? [])).catch(() => {});
   }, []);
@@ -160,7 +169,7 @@ export default function Home() {
         destination: dest,
         level: lvl,
         field: fld,
-        freeOnly: freeOnly ? "1" : "0",
+        fee,
         moiOnly: moiOnly ? "1" : "0",
         q,
       });
@@ -174,7 +183,9 @@ export default function Home() {
           }).then((r) => r.json()),
         ]);
         setResults(opRes.results ?? []);
+        setPairs(opRes.pairs ?? []);
         setWebResults(webRes.results ?? []);
+        setSynthesis(webRes.synthesis ?? null);
         setActiveTab("curated");
       } catch {
         setResults([]);
@@ -184,7 +195,7 @@ export default function Home() {
         setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
       }
     },
-    [origin, destination, level, field, freeOnly, moiOnly, q]
+    [origin, destination, level, field, fee, moiOnly, q]
   );
 
   const upcomingByMonth = useMemo(() => {
@@ -204,7 +215,7 @@ export default function Home() {
   const nowMonth = new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
   const destinationCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const p of [...globeUnis, ...globeSchol]) counts.set(p.country, (counts.get(p.country) ?? 0) + p.size);
+    for (const p of [...globeUnis, ...globeSchol]) counts.set(p.continent, (counts.get(p.continent) ?? 0) + p.size);
     return counts;
   }, [globeUnis, globeSchol]);
 
@@ -244,15 +255,19 @@ export default function Home() {
             }}
           />
           <div className="relative">
-            <Badge variant="outline" className="mb-4 border-emerald-800/80 bg-emerald-950/40 text-emerald-300">
-              <Sparkles className="mr-1 h-3 w-3" /> {stats ? `${stats.free} confirmed $0-application programs` : "Curated worldwide"} · {nowMonth}
+            <Badge variant="outline" className="mb-4 whitespace-normal border-emerald-800/80 bg-emerald-950/40 text-left leading-relaxed text-emerald-300">
+              <Sparkles className="mr-1 h-3 w-3 shrink-0" />{" "}
+              {stats
+                ? `${stats.free} confirmed $0-fee programs · ${stats.lowFeeUnis} universities ≤ $30 to apply · ${stats.linked} uni↔scholarship links`
+                : "Curated worldwide"}{" "}
+              · {nowMonth}
             </Badge>
             <h1 className="max-w-3xl text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
               Every <span className="text-emerald-400">free-application</span> scholarship & university on Earth —
               matched to <span className="text-amber-300">your nationality</span>.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-400 sm:text-base">
-              Deep-search verified programs from undergraduate to PhD with zero application fees, English-test waivers
+              Deep-search verified programs from undergraduate to PhD with zero or ≤$30 application fees, English-test waivers
               for your country (Medium-of-Instruction), local language requirements, recommendation rules, transcript
               policies, deadlines open right now — and what opens next.
             </p>
@@ -330,12 +345,18 @@ export default function Home() {
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2.5 sm:col-span-1">
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-200">Free application only</p>
-                        <p className="truncate text-[10px] text-slate-500">Hide programs with fees</p>
-                      </div>
-                      <Switch checked={freeOnly} onCheckedChange={setFreeOnly} />
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2">
+                      <p className="mb-1 text-xs font-medium text-slate-200">Application fee</p>
+                      <Select value={fee} onValueChange={setFee}>
+                        <SelectTrigger className="h-8 border-slate-700 bg-slate-950 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="border-slate-700 bg-slate-900">
+                          <SelectItem value="free">$0 — free only</SelectItem>
+                          <SelectItem value="low">≤ $30 or local equivalent</SelectItem>
+                          <SelectItem value="all">Any fee</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2.5 sm:col-span-1">
                       <div className="min-w-0">
@@ -368,7 +389,7 @@ export default function Home() {
                   <button
                     className="rounded-full border border-slate-700 px-3 py-1 text-slate-300 transition hover:border-emerald-600 hover:text-emerald-300"
                     onClick={() => {
-                      setOrigin("Ghana"); setFreeOnly(true); setMoiOnly(true);
+                      setOrigin("Ghana"); setFee("free"); setMoiOnly(true);
                       runSearch({ destination: "Europe", level: "masters", field: "any" });
                     }}
                   >
@@ -377,11 +398,20 @@ export default function Home() {
                   <button
                     className="rounded-full border border-slate-700 px-3 py-1 text-slate-300 transition hover:border-emerald-600 hover:text-emerald-300"
                     onClick={() => {
-                      setOrigin("Ghana"); setFreeOnly(true); setMoiOnly(false);
+                      setOrigin("Ghana"); setFee("low"); setMoiOnly(false);
                       runSearch({ destination: "Asia", level: "phd", field: "computer science" });
                     }}
                   >
                     Ghanaian → PhD in Asia, CS, free to apply
+                  </button>
+                  <button
+                    className="rounded-full border border-teal-700/60 px-3 py-1 text-teal-200 transition hover:border-teal-500 hover:text-teal-100"
+                    onClick={() => {
+                      setOrigin("Ghana"); setFee("low"); setMoiOnly(false);
+                      runSearch({ destination: "all", level: "masters", field: "any" });
+                    }}
+                  >
+                    Ghanaian → apply to both: university ≤$30 + linked scholarship
                   </button>
                 </div>
               </CardContent>
@@ -398,7 +428,8 @@ export default function Home() {
             {searched && (
               <p className="text-xs text-slate-500">
                 Filters: {origin}-based · {destination === "all" ? "worldwide" : destination} ·{" "}
-                {level === "all" ? "all levels" : level} {moiOnly ? "· English-waiver only" : ""}
+                {level === "all" ? "all levels" : level} {moiOnly ? "· English-waiver only" : ""} ·{" "}
+                {fee === "free" ? "$0-fee only" : fee === "low" ? "fees ≤ $30 (or local)" : "any fee"}
               </p>
             )}
           </div>
@@ -422,6 +453,9 @@ export default function Home() {
                 <TabsTrigger value="curated" className="data-[state=active]:bg-slate-800">
                   Curated matches ({results.length})
                 </TabsTrigger>
+                <TabsTrigger value="pairs" className="data-[state=active]:bg-slate-800">
+                  🤝 Apply to both ({pairs.length})
+                </TabsTrigger>
                 <TabsTrigger value="web" className="data-[state=active]:bg-slate-800">
                   Deep web results ({webResults.length})
                 </TabsTrigger>
@@ -440,9 +474,36 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
                     {results.map((op) => (
                       <OpportunityCard key={op.id} op={op} originCountry={origin} />
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="pairs" className="mt-4">
+                {searching ? (
+                  <div className="flex items-center gap-3 py-16 text-slate-400">
+                    <Loader2 className="h-5 w-5 animate-spin" /> Building university + scholarship pairs…
+                  </div>
+                ) : pairs.length === 0 ? (
+                  <Card className="border-dashed border-slate-800 bg-slate-900/40">
+                    <CardContent className="py-10 text-center text-sm text-slate-400">
+                      No university↔scholarship pairs match these filters — pairs appear when a linked scholarship shares
+                      the filters with its university. Try widening the destination, level or fee filter.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-5">
+                    <p className="text-xs leading-relaxed text-slate-500">
+                      Each pair shows the <span className="font-semibold text-slate-300">university application</span> and
+                      the <span className="font-semibold text-slate-300">funding application</span> side by side, with the
+                      combined cost and a saved checklist — so you always know when you have{" "}
+                      <span className="font-semibold text-teal-300">both done</span>.
+                    </p>
+                    {pairs.map((p) => (
+                      <PairCard key={p.id} pair={p} originCountry={origin} />
                     ))}
                   </div>
                 )}
@@ -451,7 +512,7 @@ export default function Home() {
               <TabsContent value="web" className="mt-4">
                 {searching ? (
                   <div className="flex items-center gap-3 py-16 text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin" /> Running 3 deep web queries…
+                    <Loader2 className="h-5 w-5 animate-spin" /> Running 4 deep web queries + AI briefing…
                   </div>
                 ) : webResults.length === 0 ? (
                   <Card className="border-dashed border-slate-800 bg-slate-900/40">
@@ -460,31 +521,57 @@ export default function Home() {
                     </CardContent>
                   </Card>
                 ) : (
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    {webResults.map((w) => (
-                      <a
-                        key={w.url}
-                        href={w.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-emerald-700"
-                      >
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          {w.favicon ? (
-                            <img src={w.favicon} alt="" className="h-4 w-4 rounded" />
-                          ) : (
-                            <Globe2 className="h-3.5 w-3.5" />
+                  <div>
+                    {synthesis && (
+                      <div className="mb-4 rounded-xl border border-emerald-800/60 bg-emerald-950/40 p-4 text-sm leading-relaxed text-emerald-100">
+                        <p className="flex items-start gap-2">
+                          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                          <span>
+                            <strong className="text-emerald-300">AI briefing for {origin}:</strong> {synthesis}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                    <div className="grid gap-3 lg:grid-cols-2 [&>*]:min-w-0">
+                      {webResults.map((w) => (
+                        <a
+                          key={w.url}
+                          href={w.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-emerald-700"
+                        >
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                            {w.favicon ? (
+                              <img src={w.favicon} alt="" className="h-4 w-4 rounded" />
+                            ) : (
+                              <Globe2 className="h-3.5 w-3.5" />
+                            )}
+                            <span className="truncate">{w.host_name}</span>
+                            {w.date && <span aria-hidden>·</span>}
+                            {w.date && <span>{w.date}</span>}
+                          </div>
+                          <h3 className="mt-1.5 text-sm font-semibold leading-snug text-slate-100 group-hover:text-emerald-300">
+                            {w.name}
+                          </h3>
+                          <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-400">{w.snippet}</p>
+                          {(w.freeMention || w.feeMention) && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {w.freeMention && (
+                                <span className="rounded-full border border-emerald-700/60 bg-emerald-950/50 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                  free / waiver mentioned
+                                </span>
+                              )}
+                              {w.feeMention && (
+                                <span className="rounded-full border border-teal-700/60 bg-teal-950/40 px-2 py-0.5 text-[10px] text-teal-300">
+                                  fee amounts mentioned
+                                </span>
+                              )}
+                            </div>
                           )}
-                          <span className="truncate">{w.host_name}</span>
-                          {w.date && <span aria-hidden>·</span>}
-                          {w.date && <span>{w.date}</span>}
-                        </div>
-                        <h3 className="mt-1.5 text-sm font-semibold leading-snug text-slate-100 group-hover:text-emerald-300">
-                          {w.name}
-                        </h3>
-                        <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-400">{w.snippet}</p>
-                      </a>
-                    ))}
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
               </TabsContent>
@@ -505,8 +592,8 @@ export default function Home() {
           <div className="grid gap-4 lg:grid-cols-3">
             <GlobeView
               points={globeUnis}
-              title="Globe 1 — Universities with $0 applications"
-              subtitle="Tuition-free & free-apply institutions by country"
+              title="Globe 1 — Universities: $0 or ≤$30 to apply"
+              subtitle="Free-apply & low-fee institutions by country"
               legend={continentLegend(globeUnis)}
               onCountrySelect={(c) => runSearch({ destination: c })}
             />
@@ -577,7 +664,7 @@ export default function Home() {
               <ArrowDown className="mr-1 h-4 w-4" /> Filter these in search
             </Button>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
             {openNow.slice(0, 8).map((op) => (
               <OpportunityCard key={op.id} op={op} originCountry={origin} />
             ))}
@@ -613,12 +700,12 @@ export default function Home() {
                       {ops.length} window{ops.length === 1 ? "" : "s"}
                     </Badge>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2 [&>*]:min-w-0">
                     {ops.map((op) => (
                       <button
                         key={op.id}
                         onClick={() => runSearch({ destination: op.country === "Multiple EU countries" ? "Europe" : op.country })}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3 text-left transition hover:border-amber-700/60"
+                        className="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-900/50 px-4 py-3 text-left transition hover:border-amber-700/60"
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-slate-100">
@@ -668,7 +755,7 @@ export default function Home() {
               {
                 icon: <Rocket className="h-5 w-5 text-teal-300" />,
                 title: "Deep web + curated in one pass",
-                body: "The Deep Search runs three crafted live web queries in parallel with the curated database, so you never miss a newly-announced window.",
+                body: "Four crafted live web queries run in parallel with the curated database — every result tagged for fee signals and wrapped in an AI briefing, so you never miss a newly-announced window or a ≤$30 application.",
               },
             ].map((f) => (
               <div key={f.title} className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">

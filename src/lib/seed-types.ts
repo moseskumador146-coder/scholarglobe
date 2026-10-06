@@ -5,6 +5,7 @@ export interface SeedStep {
 
 export interface SeedOpportunity {
   name: string;
+  slug?: string; // stable id for uni↔scholarship linking (auto-slugified from name if omitted)
   kind: "SCHOLARSHIP" | "UNIVERSITY";
   provider: string;
   country: string;
@@ -18,7 +19,10 @@ export interface SeedOpportunity {
   feeAmount: number;
   feeCurrency: string;
   feeConfirmedFree: boolean;
+  feeUsdApprox?: number; // rough USD equivalent for the ≤$30 low-fee filter
   feeNote?: string;
+  /** Slugs of linked opposite-kind opportunities (university ↔ scholarship pairs) */
+  related?: string[];
   fundingType: "FULLY_FUNDED" | "PARTIAL" | "NO_TUITION" | "SELF_FUNDED";
   fundingNote?: string;
   opensMonth?: number;

@@ -23,6 +23,7 @@ import {
   FileText,
   Globe2,
   GraduationCap,
+  Handshake,
   Landmark,
   Languages,
   Lightbulb,
@@ -39,9 +40,28 @@ export interface Cycle {
   label: string;
 }
 
+export interface RelatedOpportunity {
+  id: string;
+  slug: string;
+  name: string;
+  kind: string;
+  country: string;
+  countryCode: string;
+  feeAmount: number;
+  feeCurrency: string;
+  feeConfirmedFree: boolean;
+  feeUsd: number;
+  feeNote: string | null;
+  fundingType: string;
+  moiAccepted: boolean;
+  officialUrl: string;
+  cycle: { status: "OPEN" | "UPCOMING" | "CLOSED" | "ROLLING"; label: string };
+}
+
 export interface Opportunity {
   id: string;
   name: string;
+  slug: string;
   kind: string;
   provider: string;
   country: string;
@@ -55,7 +75,9 @@ export interface Opportunity {
   feeAmount: number;
   feeCurrency: string;
   feeConfirmedFree: boolean;
+  feeUsd: number;
   feeNote: string | null;
+  related: RelatedOpportunity[];
   fundingType: string;
   fundingNote: string | null;
   opensMonth: number | null;
@@ -83,6 +105,7 @@ export interface Opportunity {
   successTips: string | null;
   applicationSteps: string;
   stepsCount: number;
+  matchScore: number;
   cycle: Cycle;
 }
 
@@ -117,6 +140,19 @@ function statusStyles(status: string): string {
       return "bg-amber-500/15 text-amber-300 border-amber-500/40";
     default:
       return "bg-slate-500/15 text-slate-300 border-slate-500/40";
+  }
+}
+
+export function statusDotColor(status: string): string {
+  switch (status) {
+    case "OPEN":
+      return "bg-emerald-400";
+    case "ROLLING":
+      return "bg-teal-400";
+    case "UPCOMING":
+      return "bg-amber-400";
+    default:
+      return "bg-slate-500";
   }
 }
 
@@ -160,6 +196,10 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
             {op.feeConfirmedFree ? (
               <Badge className="border border-emerald-500/50 bg-emerald-500/15 text-[11px] font-semibold text-emerald-300">
                 <BadgeCheck className="mr-1 h-3 w-3" /> $0 fee — confirmed free
+              </Badge>
+            ) : op.feeUsd > 0 && op.feeUsd <= 30 ? (
+              <Badge className="border border-teal-500/50 bg-teal-500/15 text-[11px] font-semibold text-teal-200">
+                Under $30 — {op.feeCurrency} {op.feeAmount} (~${op.feeUsd})
               </Badge>
             ) : (
               <Badge className="border border-amber-500/40 bg-amber-500/10 text-[11px] text-amber-200">
@@ -232,6 +272,33 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
             <span className="font-medium text-amber-200">{FUNDING_LABEL[op.fundingType] ?? op.fundingType}:</span>{" "}
             {op.fundingNote}
           </p>
+        )}
+
+        {op.related.length > 0 && (
+          <div>
+            <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+              <Handshake className="h-3 w-3" />
+              {op.kind === "UNIVERSITY" ? "Fund it with — linked scholarships" : "Apply at — linked universities"}
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {op.related.map((r) => (
+                <a
+                  key={r.slug}
+                  href={r.officialUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`${r.name} — ${r.country} — ${r.feeConfirmedFree ? "$0 application" : `${r.feeCurrency} ${r.feeAmount}`} — ${r.cycle.status}: ${r.cycle.label}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-teal-600 hover:text-teal-200"
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${statusDotColor(r.cycle.status)}`} />
+                  {flagEmoji(r.countryCode)} {r.name}
+                  <span className="font-semibold text-slate-500">
+                    {r.feeConfirmedFree ? "$0" : r.feeUsd > 0 && r.feeUsd <= 30 ? `~$${r.feeUsd}` : "fee"}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
         )}
       </CardContent>
 
@@ -312,6 +379,27 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
               {op.cycleNote && (
                 <Section title="Application window" icon={<CalendarClock className="h-4 w-4" />}>
                   {op.cycleNote}
+                </Section>
+              )}
+              {op.related.length > 0 && (
+                <Section
+                  title={op.kind === "UNIVERSITY" ? "Fund it with (linked scholarships)" : "Apply at (linked universities)"}
+                  icon={<Handshake className="h-4 w-4" />}
+                >
+                  <ul className="mt-1 space-y-1.5">
+                    {op.related.map((r) => (
+                      <li key={r.slug} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${statusDotColor(r.cycle.status)}`} />
+                        <span className="font-medium text-slate-100">{r.name}</span>
+                        <span className="text-slate-500">
+                          {flagEmoji(r.countryCode)} {r.country} · {r.feeConfirmedFree ? "$0 application" : `${r.feeCurrency} ${r.feeAmount}`} · {r.cycle.status}
+                        </span>
+                        <a href={r.officialUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:text-emerald-300">
+                          official page ↗
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
                 </Section>
               )}
               {op.eligibilityNote && (
