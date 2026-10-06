@@ -14,6 +14,7 @@ export async function GET() {
   let lowFeeUnis = 0;
   let freeUnis = 0;
   let scholarships = 0;
+  let online = 0;
   let free = 0;
   let moi = 0;
   let linked = 0;
@@ -21,7 +22,9 @@ export async function GET() {
 
   for (const r of rows) {
     const isUni = r.kind === "UNIVERSITY";
+    const isOnline = r.kind === "ONLINE_DEGREE" || r.kind === "CERTIFICATE";
     if (isUni) universities++;
+    else if (isOnline) online++;
     else scholarships++;
     if (r.feeConfirmedFree) free++;
     if (r.moiAccepted) moi++;
@@ -38,6 +41,7 @@ export async function GET() {
     moi,
     universities,
     scholarships,
+    online,
     freeUnis,
     lowFeeUnis,
     linked,

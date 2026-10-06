@@ -9,6 +9,7 @@ import { UNIS_EUROPE_2 } from "../src/lib/seed-unis-europe-2";
 import { UNIS_WORLD_1 } from "../src/lib/seed-unis-world-1";
 import { UNIS_WORLD_2 } from "../src/lib/seed-unis-world-2";
 import { EXTRA_SCHOLARSHIPS } from "../src/lib/seed-extra-scholarships";
+import { ONLINE_SEED } from "../src/lib/seed-online";
 import { EXISTING_SLUGS, RELATED_PATCH } from "../src/lib/seed-links";
 
 const db = new PrismaClient();
@@ -23,6 +24,7 @@ const ALL: SeedOpportunity[] = [
   ...UNIS_WORLD_1,
   ...UNIS_WORLD_2,
   ...EXTRA_SCHOLARSHIPS,
+  ...ONLINE_SEED,
 ];
 
 /** kebab-case slug from a name (fallback when no explicit slug/slug-map entry) */

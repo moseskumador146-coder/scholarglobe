@@ -91,14 +91,25 @@ export function EmailSendDialog({ open, onOpenChange, draft, title }: Props) {
       window.location.href = mailtoUrl(draft);
       onOpenChange(false);
       toast({ title: "Opening your mail app…", description: "The email is pre-filled — review and press send." });
-    } else if (selected === "gmail") {
-      window.open(gmailUrl(draft), "_blank", "noopener,noreferrer");
+    } else if (selected === "gmail" || selected === "outlook") {
+      const url = selected === "gmail" ? gmailUrl(draft) : outlookUrl(draft);
+      // open a new tab; if the browser blocks popups, fall back to a user-initiated
+      // synthetic anchor so the compose window ALWAYS opens
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
       onOpenChange(false);
-      toast({ title: "Gmail draft opened", description: "Review the draft and press send in Gmail." });
-    } else if (selected === "outlook") {
-      window.open(outlookUrl(draft), "_blank", "noopener,noreferrer");
-      onOpenChange(false);
-      toast({ title: "Outlook draft opened", description: "Review the draft and press send in Outlook." });
+      toast({
+        title: selected === "gmail" ? "Gmail draft opened" : "Outlook draft opened",
+        description: "Review the draft and press send in your webmail.",
+      });
     } else {
       copyEmail(draft).then((ok) => {
         setCopied(ok);

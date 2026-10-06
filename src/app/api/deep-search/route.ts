@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
     const destination: string = body.destination && body.destination !== "all" ? body.destination : "worldwide";
     const level: string = body.level && body.level !== "all" ? body.level : "";
     const field: string = body.field && body.field !== "any" ? body.field : "";
+    // mode "online" re-tools the queries at free online degrees / certificates
+    const onlineMode: boolean = body.mode === "online";
 
     const levelWord = level || "bachelors masters PhD";
     const fieldWord = field || "";
@@ -50,12 +52,19 @@ export async function POST(req: NextRequest) {
     const nextYear = year + 1;
 
     // 4 crafted deep queries — like a real applicant + a fee hunter + a waiver hunter
-    const queries = [
-      `fully funded scholarships ${year}-${nextYear} for ${origin} students ${levelWord} ${fieldWord} ${destination} no application fee`.replace(/\s+/g, " ").trim(),
-      `${origin} students eligible scholarships ${destination} ${levelWord} ${fieldWord} application deadline open now ${year}`.replace(/\s+/g, " ").trim(),
-      `universities ${destination} application fee below 30 USD OR free application fee international students ${levelWord} ${fieldWord} ${year}`.replace(/\s+/g, " ").trim(),
-      `${origin} medium of instruction WAEC IELTS waiver university admission english test not required ${destination}`.replace(/\s+/g, " ").trim(),
-    ];
+    const queries = onlineMode
+      ? [
+          `free online degree accredited tuition-free university ${origin} students ${levelWord || "bachelors masters"} ${fieldWord} ${year}`.replace(/\s+/g, " ").trim(),
+          `free professional certificate courses ${fieldWord || "google ibm cisco"} ${destination} free certificate completion ${year} for Africans OR international students`.replace(/\s+/g, " ").trim(),
+          `online master's PhD scholarship fully funded distance learning ${origin} ${fieldWord} ${destination} no tuition ${year}-${nextYear}`.replace(/\s+/g, " ").trim(),
+          `university of the people OR coursera financial aid OR edx free certificate MOI english waiver online admission ${origin}`.replace(/\s+/g, " ").trim(),
+        ]
+      : [
+          `fully funded scholarships ${year}-${nextYear} for ${origin} students ${levelWord} ${fieldWord} ${destination} no application fee`.replace(/\s+/g, " ").trim(),
+          `${origin} students eligible scholarships ${destination} ${levelWord} ${fieldWord} application deadline open now ${year}`.replace(/\s+/g, " ").trim(),
+          `universities ${destination} application fee below 30 USD OR free application fee international students ${levelWord} ${fieldWord} ${year}`.replace(/\s+/g, " ").trim(),
+          `${origin} medium of instruction WAEC IELTS waiver university admission english test not required ${destination}`.replace(/\s+/g, " ").trim(),
+        ];
 
     const key = JSON.stringify(queries);
     const cached = cache.get(key);
@@ -111,12 +120,15 @@ export async function POST(req: NextRequest) {
         messages: [
           {
             role: "assistant",
-            content:
-              "You are an expert international scholarship advisor. Write a tight, concrete briefing (max 110 words, plain text, no markdown headers) telling this student: which programmes from the results look open right now, which mention free or low application fees (below $30), and the 2-3 most useful next actions. Flag anything uncertain as 'verify on the official page'.",
+            content: onlineMode
+              ? "You are an expert online-learning advisor. Write a tight, concrete briefing (max 110 words, plain text, no markdown headers) telling this student: which free online degrees, tuition-free universities or free professional certificates from the results are the best fit right now, which are accredited vs unaccredited, and the 2-3 most useful next actions. Flag anything uncertain as 'verify on the official page'."
+              : "You are an expert international scholarship advisor. Write a tight, concrete briefing (max 110 words, plain text, no markdown headers) telling this student: which programmes from the results look open right now, which mention free or low application fees (below $30), and the 2-3 most useful next actions. Flag anything uncertain as 'verify on the official page'.",
           },
           {
             role: "user",
-            content: `Student profile: from ${origin}; level ${levelWord || "any"}; field ${fieldWord || "any"}; destination ${destination}.\nLive search results:\n${context}`,
+            content: onlineMode
+              ? `Student profile: from ${origin}; looking for free online learning — ${levelWord || "any level"}; field ${fieldWord || "any"}; region focus ${destination}.\nLive search results:\n${context}`
+              : `Student profile: from ${origin}; level ${levelWord || "any"}; field ${fieldWord || "any"}; destination ${destination}.\nLive search results:\n${context}`,
           },
         ],
         thinking: { type: "disabled" },

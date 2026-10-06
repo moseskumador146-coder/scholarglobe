@@ -5,7 +5,7 @@
  * paste-ready answers per application, with AI drafting support.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -48,11 +48,21 @@ const EMPTY_REF: Referee = { name: "", title: "", institution: "", email: "", re
 export function ApplicationWizard() {
   const { profile, setProfile, apps, updateApplication, profileCompletion } = useCopilot();
   const { toast } = useToast();
-  const [activeSlug, setActiveSlug] = useState<string>(apps[0]?.slug ?? "");
+  const [activeSlug, setActiveSlug] = useState<string>("");
   const [referee, setReferee] = useState<Referee>(EMPTY_REF);
   const [aiBusy, setAiBusy] = useState(false);
 
   const app = useMemo(() => apps.find((a) => a.slug === activeSlug) ?? null, [apps, activeSlug]);
+
+  // Apps load after mount (browser-local store) — keep a valid selection as the
+  // list changes so the answers panel is never stuck on an empty slug.
+  useEffect(() => {
+    if (apps.length === 0) {
+      if (activeSlug !== "") setActiveSlug("");
+      return;
+    }
+    if (!apps.some((a) => a.slug === activeSlug)) setActiveSlug(apps[0].slug);
+  }, [apps, activeSlug]);
 
   const setAnswer = (key: string, val: string) => {
     if (!app) return;
@@ -89,13 +99,7 @@ export function ApplicationWizard() {
       }).then((r) => r.json());
       if (res.draft) {
         const blocks: Record<string, string> = {};
-        const map: Record<string, string[]> = {
-          WHY_PROGRAMME: ["whyThis"],
-          STRENGTHS: ["whyThis", "achievementsNote"],
-          CAREER_PLAN: ["careerGoal"],
-          FINANCIAL_NOTE: ["financialNeed"],
-        };
-        const labels = Object.keys(map);
+        const labels = ["WHY_PROGRAMME", "STRENGTHS", "CAREER_PLAN", "FINANCIAL_NOTE"];
         let current: string | null = null;
         for (const line of String(res.draft).split("\n")) {
           const found = labels.find((l) => line.trim().startsWith(l + ":") || line.trim() === l);
@@ -103,12 +107,19 @@ export function ApplicationWizard() {
           if (current) blocks[current] += line + "\n";
         }
         const next = { ...app.answers };
-        const target = map.WHY_PROGRAMME[0];
-        if (blocks.WHY_PROGRAMME?.trim()) next[target] = blocks.WHY_PROGRAMME.trim();
-        if (blocks.CAREER_PLAN?.trim() && next.careerGoal) next.careerGoal = next.careerGoal;
+        if (blocks.WHY_PROGRAMME?.trim()) next.whyThis = blocks.WHY_PROGRAMME.trim();
+        if (blocks.STRENGTHS?.trim()) {
+          next.whyThis = next.whyThis?.trim()
+            ? `${next.whyThis.trim()}\n\n${blocks.STRENGTHS.trim()}`
+            : blocks.STRENGTHS.trim();
+        }
+        if (blocks.CAREER_PLAN?.trim()) next.careerGoal = blocks.CAREER_PLAN.trim();
         if (blocks.FINANCIAL_NOTE?.trim()) next.financialNeed = blocks.FINANCIAL_NOTE.trim();
         updateApplication(app.slug, { answers: next });
-        toast({ title: "AI draft added", description: "AI drafted your 'why' answer — edit it to sound like you." });
+        toast({
+          title: "AI draft added",
+          description: `Drafted ${Object.keys(blocks).length} answer block${Object.keys(blocks).length === 1 ? "" : "s"} — edit them to sound like you.`,
+        });
       } else {
         toast({ title: res.error ?? "AI drafting unavailable right now", variant: "destructive" });
       }

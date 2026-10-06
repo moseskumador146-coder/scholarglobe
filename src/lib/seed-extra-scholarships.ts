@@ -51,7 +51,7 @@ export const EXTRA_SCHOLARSHIPS: SeedOpportunity[] = [
     ],
     requirementsSummary: "Free application, checkbox opt-in, merit-based tuition waiver of 100%/50%.",
     eligibilityNote: "Admitted non-EU/EEA fee-paying students; awarded strictly on academic merit.",
-    officialUrl: "https://www.helsinki.fi/en/admissions-and-education/scholarship",
+    officialUrl: "https://studies.helsinki.fi/en/instructions/article/scholarships-and-tuition-fees",
     competitiveNote: "100% waivers limited; 50% more common. Pair with Aalto's equivalent scholarship as a backup.",
     successTips: "Apply on the first day of the December window — Helsinki files are reviewed competitively but early, complete files avoid the January document-rush pile where good applications fail on technicalities.",
   },

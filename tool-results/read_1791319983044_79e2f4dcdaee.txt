@@ -1,0 +1,881 @@
+     1→"use client";
+     2→
+     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→import { Badge } from "@/components/ui/badge";
+     5→import { Button } from "@/components/ui/button";
+     6→import { Card, CardContent } from "@/components/ui/card";
+     7→import { Input } from "@/components/ui/input";
+     8→import { Label } from "@/components/ui/label";
+     9→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    10→import { Switch } from "@/components/ui/switch";
+    11→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    12→import { GlobeView, continentLegend, GlobePoint } from "@/components/globe-view";
+    13→import { Opportunity, OpportunityCard, flagEmoji } from "@/components/opportunity-card";
+    14→import { Pair, PairCard } from "@/components/pair-card";
+    15→import { ThemeToggle } from "@/components/theme-toggle";
+    16→import { Reveal } from "@/components/reveal";
+    17→import { ApplyCopilot } from "@/components/copilot/apply-copilot";
+    18→import {
+    19→  ArrowDown,
+    20→  CalendarClock,
+    21→  CalendarRange,
+    22→  Globe2,
+    23→  Handshake,
+    24→  Loader2,
+    25→  Menu,
+    26→  Rocket,
+    27→  Search,
+    28→  Sparkles,
+    29→  University,
+    30→  X,
+    31→} from "lucide-react";
+    32→
+    33→const ORIGIN_COUNTRIES = [
+    34→  "Ghana", "Nigeria", "Kenya", "South Africa", "Egypt", "Ethiopia", "Uganda", "Tanzania", "Rwanda", "Zambia",
+    35→  "Zimbabwe", "Malawi", "Mozambique", "Botswana", "Senegal", "Côte d'Ivoire", "Cameroon", "Burkina Faso", "Mali", "Niger",
+    36→  "Togo", "Benin", "Sierra Leone", "Liberia", "The Gambia", "Guinea", "Gabon", "Congo", "Namibia", "Eswatini",
+    37→  "Pakistan", "India", "Bangladesh", "Nepal", "Sri Lanka", "Indonesia", "Philippines", "Vietnam", "Malaysia", "Thailand",
+    38→  "China", "Japan", "South Korea", "Turkey", "Jordan", "Lebanon", "Morocco", "Algeria", "Tunisia", "Libya",
+    39→  "Brazil", "Mexico", "Colombia", "Peru", "Ecuador", "Bolivia", "Argentina", "Chile",
+    40→];
+    41→
+    42→const DESTINATIONS = [
+    43→  { value: "all", label: "🌍 Anywhere on Earth" },
+    44→  { value: "Europe", label: "🇪🇺 Europe" },
+    45→  { value: "Asia", label: "🌏 Asia" },
+    46→  { value: "Middle East", label: "🌐 Middle East" },
+    47→  { value: "Africa", label: "🌍 Africa (continent)" },
+    48→  { value: "North America", label: "🌎 North America" },
+    49→  { value: "Oceania", label: "🏝️ Oceania" },
+    50→  { value: "United Kingdom", label: "🇬🇧 United Kingdom" },
+    51→  { value: "Germany", label: "🇩🇪 Germany" },
+    52→  { value: "France", label: "🇫🇷 France" },
+    53→  { value: "Sweden", label: "🇸🇪 Sweden" },
+    54→  { value: "Ireland", label: "🇮🇪 Ireland" },
+    55→  { value: "Belgium", label: "🇧🇪 Belgium" },
+    56→  { value: "Switzerland", label: "🇨🇭 Switzerland" },
+    57→  { value: "Hungary", label: "🇭🇺 Hungary" },
+    58→  { value: "Türkiye", label: "🇹🇷 Türkiye" },
+    59→  { value: "Italy", label: "🇮🇹 Italy" },
+    60→  { value: "Russia", label: "🇷🇺 Russia" },
+    61→  { value: "China", label: "🇨🇳 China" },
+    62→  { value: "Japan", label: "🇯🇵 Japan" },
+    63→  { value: "South Korea", label: "🇰🇷 South Korea" },
+    64→  { value: "Singapore", label: "🇸🇬 Singapore" },
+    65→  { value: "Hong Kong", label: "🇭🇰 Hong Kong" },
+    66→  { value: "India", label: "🇮🇳 India" },
+    67→  { value: "Saudi Arabia", label: "🇸🇦 Saudi Arabia" },
+    68→  { value: "United Arab Emirates", label: "🇦🇪 UAE" },
+    69→  { value: "United States", label: "🇺🇸 United States" },
+    70→  { value: "Canada", label: "🇨🇦 Canada" },
+    71→  { value: "Australia", label: "🇦🇺 Australia" },
+    72→  { value: "New Zealand", label: "🇳🇿 New Zealand" },
+    73→  { value: "Ghana", label: "🇬🇭 Ghana (study at home)" },
+    74→  { value: "Cameroon", label: "🇨🇲 Cameroon (Pan-African)" },
+    75→];
+    76→
+    77→const LEVELS = [
+    78→  { value: "all", label: "All levels" },
+    79→  { value: "undergraduate", label: "Undergraduate (Bachelor's)" },
+    80→  { value: "masters", label: "Master's" },
+    81→  { value: "phd", label: "PhD / Doctoral" },
+    82→];
+    83→
+    84→const FIELDS = [
+    85→  { value: "any", label: "Any field of study" },
+    86→  { value: "engineering", label: "Engineering" },
+    87→  { value: "computer science", label: "Computer Science / IT" },
+    88→  { value: "medicine & health", label: "Medicine & Health" },
+    89→  { value: "natural sciences", label: "Natural Sciences" },
+    90→  { value: "mathematics", label: "Mathematics / Data" },
+    91→  { value: "agriculture & food", label: "Agriculture & Food" },
+    92→  { value: "business & economics", label: "Business & Economics" },
+    93→  { value: "social sciences", label: "Social Sciences" },
+    94→  { value: "public policy", label: "Public Policy / Governance" },
+    95→  { value: "development studies", label: "Development Studies" },
+    96→  { value: "environment", label: "Environment / Climate" },
+    97→  { value: "energy", label: "Energy" },
+    98→  { value: "law", label: "Law" },
+    99→  { value: "education", label: "Education" },
+   100→  { value: "arts & humanities", label: "Arts & Humanities" },
+   101→];
+   102→
+   103→const NAV_LINKS = [
+   104→  { href: "#search", label: "Search" },
+   105→  { href: "#copilot", label: "Apply Co-Pilot" },
+   106→  { href: "#globes", label: "3 Globes" },
+   107→  { href: "#open-now", label: "Open now" },
+   108→  { href: "#upcoming", label: "Upcoming" },
+   109→];
+   110→
+   111→interface WebResult {
+   112→  url: string;
+   113→  name: string;
+   114→  snippet: string;
+   115→  host_name: string;
+   116→  date?: string;
+   117→  favicon?: string;
+   118→  feeMention?: boolean;
+   119→  freeMention?: boolean;
+   120→}
+   121→
+   122→interface Stats {
+   123→  total: number;
+   124→  free: number;
+   125→  moi: number;
+   126→  universities: number;
+   127→  scholarships: number;
+   128→  freeUnis: number;
+   129→  lowFeeUnis: number;
+   130→  linked: number;
+   131→  openNow: number;
+   132→}
+   133→
+   134→export default function Home() {
+   135→  const [origin, setOrigin] = useState("Ghana");
+   136→  const [destination, setDestination] = useState("all");
+   137→  const [level, setLevel] = useState("all");
+   138→  const [field, setField] = useState("any");
+   139→  const [q, setQ] = useState("");
+   140→  const [fee, setFee] = useState("low");
+   141→  const [moiOnly, setMoiOnly] = useState(false);
+   142→
+   143→  const [results, setResults] = useState<Opportunity[]>([]);
+   144→  const [pairs, setPairs] = useState<Pair[]>([]);
+   145→  const [webResults, setWebResults] = useState<WebResult[]>([]);
+   146→  const [synthesis, setSynthesis] = useState<string | null>(null);
+   147→  const [searched, setSearched] = useState(false);
+   148→  const [searching, setSearching] = useState(false);
+   149→  const [activeTab, setActiveTab] = useState("curated");
+   150→
+   151→  const [stats, setStats] = useState<Stats | null>(null);
+   152→  const [globeUnis, setGlobeUnis] = useState<GlobePoint[]>([]);
+   153→  const [globeSchol, setGlobeSchol] = useState<GlobePoint[]>([]);
+   154→  const [globeStatus, setGlobeStatus] = useState<GlobePoint[]>([]);
+   155→  const [openNow, setOpenNow] = useState<Opportunity[]>([]);
+   156→  const [upcoming, setUpcoming] = useState<Opportunity[]>([]);
+   157→  const [menuOpen, setMenuOpen] = useState(false);
+   158→
+   159→  const resultsRef = useRef<HTMLDivElement>(null);
+   160→
+   161→  useEffect(() => {
+   162→    fetch("/api/stats").then((r) => r.json()).then(setStats).catch(() => {});
+   163→    fetch("/api/globe?type=universities").then((r) => r.json()).then((d) => setGlobeUnis(d.points ?? [])).catch(() => {});
+   164→    fetch("/api/globe?type=scholarships").then((r) => r.json()).then((d) => setGlobeSchol(d.points ?? [])).catch(() => {});
+   165→    fetch("/api/globe?type=status").then((r) => r.json()).then((d) => setGlobeStatus(d.points ?? [])).catch(() => {});
+   166→    const base = "/api/opportunities?fee=free";
+   167→    fetch(`${base}&status=OPEN`).then((r) => r.json()).then((d) => setOpenNow(d.results ?? [])).catch(() => {});
+   168→    fetch(`${base}&status=UPCOMING`).then((r) => r.json()).then((d) => setUpcoming(d.results ?? [])).catch(() => {});
+   169→  }, []);
+   170→
+   171→  const runSearch = useCallback(
+   172→    async (overrides?: { destination?: string; level?: string; field?: string }) => {
+   173→      const dest = overrides?.destination ?? destination;
+   174→      const lvl = overrides?.level ?? level;
+   175→      const fld = overrides?.field ?? field;
+   176→      if (overrides?.destination) setDestination(overrides.destination);
+   177→      if (overrides?.level) setLevel(overrides.level);
+   178→      if (overrides?.field) setField(overrides.field);
+   179→
+   180→      setSearching(true);
+   181→      setSearched(true);
+   182→      const params = new URLSearchParams({
+   183→        origin,
+   184→        destination: dest,
+   185→        level: lvl,
+   186→        field: fld,
+   187→        fee,
+   188→        moiOnly: moiOnly ? "1" : "0",
+   189→        q,
+   190→      });
+   191→      try {
+   192→        const [opRes, webRes] = await Promise.all([
+   193→          fetch(`/api/opportunities?${params}`).then((r) => r.json()),
+   194→          fetch("/api/deep-search", {
+   195→            method: "POST",
+   196→            headers: { "Content-Type": "application/json" },
+   197→            body: JSON.stringify({ origin, destination: dest, level: lvl, field: fld }),
+   198→          }).then((r) => r.json()),
+   199→        ]);
+   200→        setResults(opRes.results ?? []);
+   201→        setPairs(opRes.pairs ?? []);
+   202→        setWebResults(webRes.results ?? []);
+   203→        setSynthesis(webRes.synthesis ?? null);
+   204→        setActiveTab("curated");
+   205→      } catch {
+   206→        setResults([]);
+   207→        setWebResults([]);
+   208→      } finally {
+   209→        setSearching(false);
+   210→        setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+   211→      }
+   212→    },
+   213→    [origin, destination, level, field, fee, moiOnly, q]
+   214→  );
+   215→
+   216→  const upcomingByMonth = useMemo(() => {
+   217→    const groups = new Map<string, Opportunity[]>();
+   218→    for (const op of upcoming) {
+   219→      const d = op.cycle.nextOpen ? new Date(op.cycle.nextOpen) : null;
+   220→      const key = d
+   221→        ? d.toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" })
+   222→        : "Later";
+   223→      const arr = groups.get(key) ?? [];
+   224→      arr.push(op);
+   225→      groups.set(key, arr);
+   226→    }
+   227→    return Array.from(groups.entries());
+   228→  }, [upcoming]);
+   229→
+   230→  const nowMonth = new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+   231→  const destinationCounts = useMemo(() => {
+   232→    const counts = new Map<string, number>();
+   233→    for (const p of [...globeUnis, ...globeSchol]) counts.set(p.continent, (counts.get(p.continent) ?? 0) + p.size);
+   234→    return counts;
+   235→  }, [globeUnis, globeSchol]);
+   236→
+   237→  return (
+   238→    <div className="flex min-h-screen flex-col bg-background text-foreground">
+   239→      {/* ─── Header ─────────────────────────────────────────────── */}
+   240→      <header className="glass sticky top-0 z-40 border-b border-border/70">
+   241→        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+   242→          <a href="#top" className="flex items-center gap-2 font-extrabold tracking-tight">
+   243→            <span className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/30">
+   244→              <Globe2 className="h-5 w-5 text-white" />
+   245→            </span>
+   246→            <span className="text-lg">
+   247→              Scholar<span className="text-gradient">Globe</span>
+   248→            </span>
+   249→            <Badge variant="outline" className="ml-1 hidden border-success/50 text-[10px] text-success md:inline-flex">
+   250→              $0-fee verified
+   251→            </Badge>
+   252→          </a>
+   253→
+   254→          <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex">
+   255→            {NAV_LINKS.map((l) => (
+   256→              <a key={l.href} href={l.href} className="transition hover:text-foreground">
+   257→                {l.label}
+   258→              </a>
+   259→            ))}
+   260→          </nav>
+   261→
+   262→          <div className="flex items-center gap-2">
+   263→            <ThemeToggle />
+   264→            <Button asChild size="sm" className="hidden gap-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 font-semibold text-white shadow-md shadow-indigo-500/25 hover:opacity-90 sm:inline-flex dark:from-indigo-500 dark:to-violet-500">
+   265→              <a href="#copilot">
+   266→                <Handshake className="h-4 w-4" /> Apply Co-Pilot
+   267→              </a>
+   268→            </Button>
+   269→            <Button
+   270→              size="icon"
+   271→              variant="outline"
+   272→              className="h-9 w-9 rounded-full lg:hidden"
+   273→              aria-label={menuOpen ? "Close menu" : "Open menu"}
+   274→              onClick={() => setMenuOpen((m) => !m)}
+   275→            >
+   276→              {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+   277→            </Button>
+   278→          </div>
+   279→        </div>
+   280→        {menuOpen && (
+   281→          <nav className="glass border-t border-border/70 px-4 py-3 lg:hidden">
+   282→            <div className="grid gap-1">
+   283→              {NAV_LINKS.map((l) => (
+   284→                <a
+   285→                  key={l.href}
+   286→                  href={l.href}
+   287→                  onClick={() => setMenuOpen(false)}
+   288→                  className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent"
+   289→                >
+   290→                  {l.label}
+   291→                </a>
+   292→              ))}
+   293→            </div>
+   294→          </nav>
+   295→        )}
+   296→      </header>
+   297→
+   298→      <main id="top" className="mx-auto w-full max-w-7xl flex-1 px-4 sm:px-6">
+   299→        {/* ─── Hero + Search ────────────────────────────────────── */}
+   300→        <section className="relative overflow-hidden py-10 sm:py-16">
+   301→          <div className="pointer-events-none absolute inset-0" aria-hidden>
+   302→            <div className="orb-a absolute -top-20 left-[8%] h-64 w-64 rounded-full bg-gradient-to-br from-indigo-500/25 to-violet-500/10 blur-3xl" />
+   303→            <div className="orb-b absolute -top-10 right-[6%] h-72 w-72 rounded-full bg-gradient-to-br from-emerald-400/20 to-cyan-400/10 blur-3xl" />
+   304→            <div
+   305→              className="absolute inset-0"
+   306→              style={{
+   307→                background:
+   308→                  "radial-gradient(700px 320px at 18% 0%, var(--hero-glow-1), transparent), radial-gradient(640px 320px at 82% 6%, var(--hero-glow-2), transparent), radial-gradient(520px 300px at 50% 30%, var(--hero-glow-3), transparent)",
+   309→              }}
+   310→            />
+   311→          </div>
+   312→
+   313→          <div className="relative">
+   314→            <Reveal>
+   315→              <Badge variant="outline" className="mb-5 whitespace-normal border-primary/40 bg-primary/5 px-3 py-1 text-left leading-relaxed text-primary">
+   316→                <Sparkles className="mr-1 h-3 w-3 shrink-0" />{" "}
+   317→                {stats
+   318→                  ? `${stats.free} confirmed $0-fee programs · ${stats.lowFeeUnis} universities ≤ $30 to apply · ${stats.linked} uni↔scholarship links`
+   319→                  : "Curated worldwide"}{" "}
+   320→                · {nowMonth}
+   321→              </Badge>
+   322→            </Reveal>
+   323→
+   324→            <Reveal delay={80}>
+   325→              <h1 className="max-w-3xl text-3xl font-extrabold leading-[1.12] tracking-tight sm:text-5xl sm:leading-[1.08]">
+   326→                Every <span className="text-gradient-animated">free-application</span> scholarship &amp; university on
+   327→                Earth — matched to <span className="text-warning">your nationality</span>.
+   328→              </h1>
+   329→            </Reveal>
+   330→
+   331→            <Reveal delay={150}>
+   332→              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+   333→                Deep-search verified programs from undergraduate to PhD with zero or ≤$30 application fees, English-test
+   334→                waivers for your country (Medium-of-Instruction), local language requirements, recommendation rules,
+   335→                transcript policies, deadlines open right now — and an{" "}
+   336→                <span className="font-semibold text-foreground">Apply Co-Pilot</span> that prepares the whole
+   337→                application with you.
+   338→              </p>
+   339→            </Reveal>
+   340→
+   341→            {/* Search panel */}
+   342→            <Reveal delay={220}>
+   343→              <Card className="mt-8 border-border bg-card/80 shadow-xl shadow-primary/5 backdrop-blur">
+   344→                <CardContent className="p-4 sm:p-6">
+   345→                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+   346→                    <div className="space-y-1.5">
+   347→                      <Label htmlFor="origin" className="text-xs font-medium text-muted-foreground">
+   348→                        I am searching from
+   349→                      </Label>
+   350→                      <Select value={origin} onValueChange={setOrigin}>
+   351→                        <SelectTrigger id="origin" className="h-11">
+   352→                          <SelectValue placeholder="Country" />
+   353→                        </SelectTrigger>
+   354→                        <SelectContent className="max-h-72">
+   355→                          {ORIGIN_COUNTRIES.map((c) => (
+   356→                            <SelectItem key={c} value={c}>
+   357→                              {c}
+   358→                            </SelectItem>
+   359→                          ))}
+   360→                        </SelectContent>
+   361→                      </Select>
+   362→                    </div>
+   363→
+   364→                    <div className="space-y-1.5">
+   365→                      <Label className="text-xs font-medium text-muted-foreground">Destination</Label>
+   366→                      <Select value={destination} onValueChange={setDestination}>
+   367→                        <SelectTrigger className="h-11">
+   368→                          <SelectValue placeholder="Anywhere" />
+   369→                        </SelectTrigger>
+   370→                        <SelectContent className="max-h-72">
+   371→                          {DESTINATIONS.map((d) => (
+   372→                            <SelectItem key={d.value} value={d.value}>
+   373→                              {d.label}
+   374→                            </SelectItem>
+   375→                          ))}
+   376→                        </SelectContent>
+   377→                      </Select>
+   378→                    </div>
+   379→
+   380→                    <div className="space-y-1.5">
+   381→                      <Label className="text-xs font-medium text-muted-foreground">Degree level</Label>
+   382→                      <Select value={level} onValueChange={setLevel}>
+   383→                        <SelectTrigger className="h-11">
+   384→                          <SelectValue placeholder="Any level" />
+   385→                        </SelectTrigger>
+   386→                        <SelectContent>
+   387→                          {LEVELS.map((l) => (
+   388→                            <SelectItem key={l.value} value={l.value}>
+   389→                              {l.label}
+   390→                            </SelectItem>
+   391→                          ))}
+   392→                        </SelectContent>
+   393→                      </Select>
+   394→                    </div>
+   395→
+   396→                    <div className="space-y-1.5">
+   397→                      <Label className="text-xs font-medium text-muted-foreground">Field of study</Label>
+   398→                      <Select value={field} onValueChange={setField}>
+   399→                        <SelectTrigger className="h-11">
+   400→                          <SelectValue placeholder="Any field" />
+   401→                        </SelectTrigger>
+   402→                        <SelectContent className="max-h-72">
+   403→                          {FIELDS.map((f) => (
+   404→                            <SelectItem key={f.value} value={f.value}>
+   405→                              {f.label}
+   406→                            </SelectItem>
+   407→                          ))}
+   408→                        </SelectContent>
+   409→                      </Select>
+   410→                    </div>
+   411→                  </div>
+   412→
+   413→                  <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+   414→                    <div className="grid gap-3 sm:grid-cols-3">
+   415→                      <div className="rounded-xl border border-border bg-secondary/50 px-3 py-2">
+   416→                        <p className="mb-1 text-xs font-semibold text-foreground">Application fee</p>
+   417→                        <Select value={fee} onValueChange={setFee}>
+   418→                          <SelectTrigger className="h-8 border-none bg-transparent text-xs shadow-none">
+   419→                            <SelectValue />
+   420→                          </SelectTrigger>
+   421→                          <SelectContent>
+   422→                            <SelectItem value="free">$0 — free only</SelectItem>
+   423→                            <SelectItem value="low">≤ $30 or local equivalent</SelectItem>
+   424→                            <SelectItem value="all">Any fee</SelectItem>
+   425→                          </SelectContent>
+   426→                        </Select>
+   427→                      </div>
+   428→                      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary/50 px-3 py-2.5">
+   429→                        <div className="min-w-0">
+   430→                          <p className="text-xs font-semibold text-foreground">English waiver for me</p>
+   431→                          <p className="truncate text-[10px] text-muted-foreground">MOI accepted from {origin}</p>
+   432→                        </div>
+   433→                        <Switch checked={moiOnly} onCheckedChange={setMoiOnly} />
+   434→                      </div>
+   435→                      <Input
+   436→                        value={q}
+   437→                        onChange={(e) => setQ(e.target.value)}
+   438→                        placeholder="Keyword — e.g. water, AI, agriculture…"
+   439→                        className="h-11 text-sm"
+   440→                        onKeyDown={(e) => e.key === "Enter" && runSearch()}
+   441→                      />
+   442→                    </div>
+   443→                    <Button
+   444→                      onClick={() => runSearch()}
+   445→                      disabled={searching}
+   446→                      size="lg"
+   447→                      className="h-12 gap-2 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 px-7 text-base font-bold text-white shadow-lg shadow-indigo-500/30 transition hover:opacity-90 active:scale-[0.98] dark:from-indigo-500 dark:via-violet-500 dark:to-fuchsia-500"
+   448→                    >
+   449→                      {searching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Rocket className="h-5 w-5" />}
+   450→                      Deep Search
+   451→                    </Button>
+   452→                  </div>
+   453→
+   454→                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+   455→                    <span className="font-medium">Try:</span>
+   456→                    <button
+   457→                      className="rounded-full border border-border bg-secondary/50 px-3 py-1.5 text-foreground transition hover:border-primary hover:text-primary"
+   458→                      onClick={() => {
+   459→                        setOrigin("Ghana"); setFee("free"); setMoiOnly(true);
+   460→                        runSearch({ destination: "Europe", level: "masters", field: "any" });
+   461→                      }}
+   462→                    >
+   463→                      Ghanaian → full scholarships in Europe, Master&apos;s, English-waived
+   464→                    </button>
+   465→                    <button
+   466→                      className="rounded-full border border-border bg-secondary/50 px-3 py-1.5 text-foreground transition hover:border-primary hover:text-primary"
+   467→                      onClick={() => {
+   468→                        setOrigin("Ghana"); setFee("low"); setMoiOnly(false);
+   469→                        runSearch({ destination: "Asia", level: "phd", field: "computer science" });
+   470→                      }}
+   471→                    >
+   472→                      Ghanaian → PhD in Asia, CS, free to apply
+   473→                    </button>
+   474→                    <button
+   475→                      className="rounded-full border border-teal-500/50 bg-teal-500/10 px-3 py-1.5 font-medium text-teal-700 transition hover:border-teal-500 dark:text-teal-300"
+   476→                      onClick={() => {
+   477→                        setOrigin("Ghana"); setFee("low"); setMoiOnly(false);
+   478→                        runSearch({ destination: "all", level: "masters", field: "any" });
+   479→                      }}
+   480→                    >
+   481→                      Ghanaian → apply to both: university ≤$30 + linked scholarship
+   482→                    </button>
+   483→                  </div>
+   484→                </CardContent>
+   485→              </Card>
+   486→            </Reveal>
+   487→          </div>
+   488→        </section>
+   489→
+   490→        {/* ─── Results ──────────────────────────────────────────── */}
+   491→        <section ref={resultsRef} id="search" className="scroll-mt-20 pb-12">
+   492→          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+   493→            <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">
+   494→              {searched ? "Your matched opportunities" : "Search the database"}
+   495→            </h2>
+   496→            {searched && (
+   497→              <p className="text-xs text-muted-foreground">
+   498→                Filters: {origin}-based · {destination === "all" ? "worldwide" : destination} ·{" "}
+   499→                {level === "all" ? "all levels" : level} {moiOnly ? "· English-waiver only" : ""} ·{" "}
+   500→                {fee === "free" ? "$0-fee only" : fee === "low" ? "fees ≤ $30 (or local)" : "any fee"}
+   501→              </p>
+   502→            )}
+   503→          </div>
+   504→
+   505→          {!searched && (
+   506→            <Card className="border-dashed bg-card/50">
+   507→              <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+   508→                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-fuchsia-500/15">
+   509→                  <Search className="h-7 w-7 text-primary" />
+   510→                </span>
+   511→                <p className="max-w-md text-sm text-muted-foreground">
+   512→                  Pick your country, destination, level and field above — then hit{" "}
+   513→                  <span className="font-semibold text-primary">Deep Search</span>. You&apos;ll get curated $0-fee
+   514→                  programs plus live web results in one pass.
+   515→                </p>
+   516→              </CardContent>
+   517→            </Card>
+   518→          )}
+   519→
+   520→          {searched && (
+   521→            <Tabs value={activeTab} onValueChange={setActiveTab}>
+   522→              <TabsList className="h-auto w-full flex-wrap justify-start bg-secondary/70">
+   523→                <TabsTrigger value="curated" className="text-xs sm:text-sm">
+   524→                  Curated matches ({results.length})
+   525→                </TabsTrigger>
+   526→                <TabsTrigger value="pairs" className="text-xs sm:text-sm">
+   527→                  🤝 Apply to both ({pairs.length})
+   528→                </TabsTrigger>
+   529→                <TabsTrigger value="web" className="text-xs sm:text-sm">
+   530→                  Deep web ({webResults.length})
+   531→                </TabsTrigger>
+   532→              </TabsList>
+   533→
+   534→              <TabsContent value="curated" className="mt-4">
+   535→                {searching ? (
+   536→                  <div className="flex items-center gap-3 py-16 text-muted-foreground">
+   537→                    <Loader2 className="h-5 w-5 animate-spin" /> Searching the database…
+   538→                  </div>
+   539→                ) : results.length === 0 ? (
+   540→                  <Card className="border-dashed bg-card/50">
+   541→                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+   542→                      No curated match with these filters. Try switching off &quot;Free application only&quot; or widen
+   543→                      the destination — and check the Deep web tab for live results.
+   544→                    </CardContent>
+   545→                  </Card>
+   546→                ) : (
+   547→                  <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+   548→                    {results.map((op) => (
+   549→                      <OpportunityCard key={op.id} op={op} originCountry={origin} />
+   550→                    ))}
+   551→                  </div>
+   552→                )}
+   553→              </TabsContent>
+   554→
+   555→              <TabsContent value="pairs" className="mt-4">
+   556→                {searching ? (
+   557→                  <div className="flex items-center gap-3 py-16 text-muted-foreground">
+   558→                    <Loader2 className="h-5 w-5 animate-spin" /> Building university + scholarship pairs…
+   559→                  </div>
+   560→                ) : pairs.length === 0 ? (
+   561→                  <Card className="border-dashed bg-card/50">
+   562→                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+   563→                      No university↔scholarship pairs match these filters — pairs appear when a linked scholarship
+   564→                      shares the filters with its university. Try widening the destination, level or fee filter.
+   565→                    </CardContent>
+   566→                  </Card>
+   567→                ) : (
+   568→                  <div className="space-y-5">
+   569→                    <p className="text-xs leading-relaxed text-muted-foreground">
+   570→                      Each pair shows the <span className="font-semibold text-foreground">university application</span>{" "}
+   571→                      and the <span className="font-semibold text-foreground">funding application</span> side by side,
+   572→                      with the combined cost and a saved checklist — so you always know when you have{" "}
+   573→                      <span className="font-semibold text-success">both done</span>.
+   574→                    </p>
+   575→                    {pairs.map((p) => (
+   576→                      <PairCard key={p.id} pair={p} originCountry={origin} />
+   577→                    ))}
+   578→                  </div>
+   579→                )}
+   580→              </TabsContent>
+   581→
+   582→              <TabsContent value="web" className="mt-4">
+   583→                {searching ? (
+   584→                  <div className="flex items-center gap-3 py-16 text-muted-foreground">
+   585→                    <Loader2 className="h-5 w-5 animate-spin" /> Running 4 deep web queries + AI briefing…
+   586→                  </div>
+   587→                ) : webResults.length === 0 ? (
+   588→                  <Card className="border-dashed bg-card/50">
+   589→                    <CardContent className="py-10 text-center text-sm text-muted-foreground">
+   590→                      No live web results right now — the curated tab above is fully available.
+   591→                    </CardContent>
+   592→                  </Card>
+   593→                ) : (
+   594→                  <div>
+   595→                    {synthesis && (
+   596→                      <div className="mb-4 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 to-fuchsia-500/5 p-4 text-sm leading-relaxed">
+   597→                        <p className="flex items-start gap-2">
+   598→                          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+   599→                          <span>
+   600→                            <strong className="text-primary">AI briefing for {origin}:</strong>{" "}
+   601→                            <span className="text-foreground/90">{synthesis}</span>
+   602→                          </span>
+   603→                        </p>
+   604→                      </div>
+   605→                    )}
+   606→                    <div className="grid gap-3 lg:grid-cols-2 [&>*]:min-w-0">
+   607→                      {webResults.map((w) => (
+   608→                        <a
+   609→                          key={w.url}
+   610→                          href={w.url}
+   611→                          target="_blank"
+   612→                          rel="noopener noreferrer"
+   613→                          className="lift group rounded-2xl border border-border bg-card p-4"
+   614→                        >
+   615→                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+   616→                            {w.favicon ? (
+   617→                              <img src={w.favicon} alt="" className="h-4 w-4 rounded" />
+   618→                            ) : (
+   619→                              <Globe2 className="h-3.5 w-3.5" />
+   620→                            )}
+   621→                            <span className="truncate">{w.host_name}</span>
+   622→                            {w.date && <span aria-hidden>·</span>}
+   623→                            {w.date && <span>{w.date}</span>}
+   624→                          </div>
+   625→                          <h3 className="mt-1.5 text-sm font-bold leading-snug text-foreground group-hover:text-primary">
+   626→                            {w.name}
+   627→                          </h3>
+   628→                          <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{w.snippet}</p>
+   629→                          {(w.freeMention || w.feeMention) && (
+   630→                            <div className="mt-2 flex flex-wrap gap-1.5">
+   631→                              {w.freeMention && (
+   632→                                <span className="rounded-full border border-success/50 bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">
+   633→                                  free / waiver mentioned
+   634→                                </span>
+   635→                              )}
+   636→                              {w.feeMention && (
+   637→                                <span className="rounded-full border border-primary/40 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+   638→                                  fee amounts mentioned
+   639→                                </span>
+   640→                              )}
+   641→                            </div>
+   642→                          )}
+   643→                        </a>
+   644→                      ))}
+   645→                    </div>
+   646→                  </div>
+   647→                )}
+   648→              </TabsContent>
+   649→            </Tabs>
+   650→          )}
+   651→        </section>
+   652→
+   653→        {/* ─── Apply Co-Pilot ───────────────────────────────────── */}
+   654→        <section id="copilot" className="scroll-mt-20 border-t border-border/70 py-12">
+   655→          <Reveal>
+   656→            <div className="mb-6">
+   657→              <Badge variant="outline" className="mb-2 gap-1 border-fuchsia-500/40 bg-fuchsia-500/10 text-[11px] font-semibold text-fuchsia-600 dark:text-fuchsia-300">
+   658→                <Handshake className="h-3 w-3" /> NEW — 50-50 applications
+   659→              </Badge>
+   660→              <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">Apply Co-Pilot — we prepare, you submit</h2>
+   661→              <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+   662→                The co-pilot collects your documents once, drafts every answer and email, and builds a submission kit per
+   663→                application — you review, choose, and press the final button on the official portal. Everything stays in
+   664→                your browser.
+   665→              </p>
+   666→            </div>
+   667→          </Reveal>
+   668→          <Reveal delay={100}>
+   669→            <ApplyCopilot />
+   670→          </Reveal>
+   671→        </section>
+   672→
+   673→        {/* ─── 3 Globes ─────────────────────────────────────────── */}
+   674→        <section id="globes" className="scroll-mt-20 border-t border-border/70 py-12">
+   675→          <Reveal>
+   676→            <div className="mb-6">
+   677→              <h2 className="text-xl font-extrabold tracking-tight sm:text-2xl">The world in 3 realistic globes</h2>
+   678→              <p className="mt-1 text-sm text-muted-foreground">
+   679→                Real terrain, oceans and a live starfield. Click any country badge — or the continent chips below — to
+   680→                filter your results.
+   681→              </p>
+   682→            </div>
+   683→          </Reveal>
+   684→
+   685→          <div className="grid gap-5 lg:grid-cols-3">
+   686→            <Reveal><GlobeView
+   687→              points={globeUnis}
+   688→              title="Globe 1 — Universities: $0 or ≤$30 to apply"
+   689→              subtitle="Free-apply & low-fee institutions by country"
+   690→              legend={continentLegend(globeUnis)}
+   691→              onCountrySelect={(c) => runSearch({ destination: c })}
+   692→            /></Reveal>
+   693→            <Reveal delay={90}><GlobeView
+   694→              points={globeSchol}
+   695→              title="Globe 2 — Scholarships by country"
+   696→              subtitle="Fully & partially funded awards you can apply to free"
+   697→              legend={continentLegend(globeSchol)}
+   698→              onCountrySelect={(c) => runSearch({ destination: c })}
+   699→            /></Reveal>
+   700→            <Reveal delay={180}><GlobeView
+   701→              points={globeStatus}
+   702→              title="Globe 3 — Open now vs upcoming"
+   703→              subtitle="Green = open/rolling · Amber = opens soon · Grey = closed"
+   704→              legend={[
+   705→                { label: "Open now", color: "#10b981" },
+   706→                { label: "Rolling", color: "#6366f1" },
+   707→                { label: "Upcoming", color: "#f59e0b" },
+   708→                { label: "Closed", color: "#8b8fa3" },
+   709→              ]}
+   710→              onCountrySelect={(c) => runSearch({ destination: c })}
+   711→            /></Reveal>
+   712→          </div>
+   713→
+   714→          <div className="mt-5 flex flex-wrap gap-2">
+   715→            {["Europe", "Asia", "Middle East", "Africa", "North America", "Oceania"].map((c) => {
+   716→              const count = destinationCounts.get(c) ?? 0;
+   717→              return (
+   718→                <button
+   719→                  key={c}
+   720→                  onClick={() => runSearch({ destination: c })}
+   721→                  className="rounded-full border border-border bg-secondary/60 px-4 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary hover:text-primary"
+   722→                >
+   723→                  {c} <span className="font-normal text-muted-foreground">({count})</span>
+   724→                </button>
+   725→              );
+   726→            })}
+   727→            <button
+   728→              onClick={() => runSearch({ destination: "all" })}
+   729→              className="rounded-full border border-primary/50 bg-primary/10 px-4 py-1.5 text-xs font-bold text-primary transition hover:bg-primary/20"
+   730→            >
+   731→              Show the whole world
+   732→            </button>
+   733→          </div>
+   734→        </section>
+   735→
+   736→        {/* ─── Open this season ─────────────────────────────────── */}
+   737→        <section id="open-now" className="scroll-mt-20 border-t border-border/70 py-12">
+   738→          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+   739→            <div>
+   740→              <h2 className="flex items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
+   741→                <span className="relative flex h-3 w-3">
+   742→                  <span className="ping-soft absolute inline-flex h-full w-full rounded-full bg-success" />
+   743→                  <span className="relative inline-flex h-3 w-3 rounded-full bg-success" />
+   744→                </span>
+   745→                Open this season — {nowMonth}
+   746→              </h2>
+   747→              <p className="mt-1 text-sm text-muted-foreground">
+   748→                {openNow.length} free-apply programs with windows open or rolling right now.
+   749→              </p>
+   750→            </div>
+   751→            <Button
+   752→              variant="outline"
+   753→              size="sm"
+   754→              onClick={() => runSearch({ destination: destination === "all" ? "all" : destination })}
+   755→            >
+   756→              <ArrowDown className="mr-1 h-4 w-4" /> Filter these in search
+   757→            </Button>
+   758→          </div>
+   759→          <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+   760→            {openNow.slice(0, 8).map((op) => (
+   761→              <OpportunityCard key={op.id} op={op} originCountry={origin} />
+   762→            ))}
+   763→          </div>
+   764→          {openNow.length > 8 && (
+   765→            <p className="mt-4 text-xs text-muted-foreground">
+   766→              + {openNow.length - 8} more open programs — run a Deep Search to see them with your filters.
+   767→            </p>
+   768→          )}
+   769→        </section>
+   770→
+   771→        {/* ─── Upcoming openings ────────────────────────────────── */}
+   772→        <section id="upcoming" className="scroll-mt-20 border-t border-border/70 py-12">
+   773→          <div className="mb-6">
+   774→            <h2 className="flex items-center gap-2 text-xl font-extrabold tracking-tight sm:text-2xl">
+   775→              <CalendarRange className="h-6 w-6 text-warning" /> Upcoming openings
+   776→            </h2>
+   777→            <p className="mt-1 text-sm text-muted-foreground">
+   778→              Plan backwards from these dates — grouped by the month each window opens.
+   779→            </p>
+   780→          </div>
+   781→
+   782→          {upcomingByMonth.length === 0 ? (
+   783→            <p className="text-sm text-muted-foreground">No upcoming windows found — everything is open or rolling.</p>
+   784→          ) : (
+   785→            <div className="space-y-8">
+   786→              {upcomingByMonth.map(([month, ops]) => (
+   787→                <div key={month}>
+   788→                  <div className="mb-3 flex items-center gap-3">
+   789→                    <h3 className="text-base font-bold text-warning">{month}</h3>
+   790→                    <div className="h-px flex-1 bg-border" />
+   791→                    <Badge variant="outline" className="text-[11px]">
+   792→                      {ops.length} window{ops.length === 1 ? "" : "s"}
+   793→                    </Badge>
+   794→                  </div>
+   795→                  <div className="grid gap-3 md:grid-cols-2 [&>*]:min-w-0">
+   796→                    {ops.map((op) => (
+   797→                      <button
+   798→                        key={op.id}
+   799→                        onClick={() => runSearch({ destination: op.country === "Multiple EU countries" ? "Europe" : op.country })}
+   800→                        className="lift flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left"
+   801→                      >
+   802→                        <div className="min-w-0">
+   803→                          <p className="truncate text-sm font-semibold text-foreground">
+   804→                            {flagEmoji(op.countryCode)} {op.name}
+   805→                          </p>
+   806→                          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+   807→                            {op.country} · {op.levels.split(",").join(" / ")} · {op.feeConfirmedFree ? "$0 fee" : "fee applies"}
+   808→                          </p>
+   809→                        </div>
+   810→                        <div className="shrink-0 text-right">
+   811→                          <p className="flex items-center gap-1 text-xs font-bold text-warning">
+   812→                            <CalendarClock className="h-3.5 w-3.5" />
+   813→                            {op.cycle.nextOpen
+   814→                              ? new Date(op.cycle.nextOpen).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })
+   815→                              : "TBA"}
+   816→                          </p>
+   817→                          <p className="text-[10px] text-muted-foreground">
+   818→                            closes{" "}
+   819→                            {op.cycle.nextClose
+   820→                              ? new Date(op.cycle.nextClose).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+   821→                              : "—"}
+   822→                          </p>
+   823→                        </div>
+   824→                      </button>
+   825→                    ))}
+   826→                  </div>
+   827→                </div>
+   828→              ))}
+   829→            </div>
+   830→          )}
+   831→        </section>
+   832→
+   833→        {/* ─── How-to strip ─────────────────────────────────────── */}
+   834→        <section className="border-t border-border/70 py-10">
+   835→          <div className="grid gap-4 sm:grid-cols-3">
+   836→            {[
+   837→              {
+   838→                icon: <University className="h-5 w-5 text-primary" />,
+   839→                title: "Every program is hand-verified",
+   840→                body: "Free-apply status, English-waiver rules (MOI), transcript policies, recommendation counts and language requirements are curated per country — including exactly what Ghanaians, Nigerians, Kenyans and other nationalities need.",
+   841→              },
+   842→              {
+   843→                icon: <Globe2 className="h-5 w-5 text-warning" />,
+   844→                title: "3 live globes, 1 click away",
+   845→                body: "Universities, scholarships and seasonal openings mapped on realistic 3D earths by continent and country. Click a country badge to pull its programs instantly.",
+   846→              },
+   847→              {
+   848→                icon: <Handshake className="h-5 w-5 text-fuchsia-500" />,
+   849→                title: "Co-Pilot + deep web in one pass",
+   850→                body: "Four crafted live web queries run in parallel with the curated database — then the Apply Co-Pilot turns any result into a guided application with documents, answers and emails.",
+   851→              },
+   852→            ].map((f) => (
+   853→              <Reveal key={f.title} className="h-full">
+   854→                <div className="lift h-full rounded-2xl border border-border bg-card p-5">
+   855→                  {f.icon}
+   856→                  <h3 className="mt-3 text-sm font-bold text-foreground">{f.title}</h3>
+   857→                  <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{f.body}</p>
+   858→                </div>
+   859→              </Reveal>
+   860→            ))}
+   861→          </div>
+   862→        </section>
+   863→      </main>
+   864→
+   865→      {/* ─── Footer ─────────────────────────────────────────────── */}
+   866→      <footer className="mt-auto border-t border-border/70 bg-secondary/40">
+   867→        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+   868→          <div className="flex flex-col items-start justify-between gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center">
+   869→            <p>
+   870→              <span className="font-bold text-foreground">ScholarGlobe</span> — free-application scholarships &amp;
+   871→              universities worldwide. Data is curated for research purposes; always verify details on the official
+   872→              program pages before paying anything. The co-pilot prepares — every official submission is made by you.
+   873→            </p>
+   874→            <p className="font-medium">Never pay an agent for a $0 application.</p>
+   875→          </div>
+   876→        </div>
+   877→      </footer>
+   878→    </div>
+   879→  );
+   880→}
+   881→

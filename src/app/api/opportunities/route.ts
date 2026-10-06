@@ -67,7 +67,7 @@ function feeUsd(r: Row): number {
  *  - field:       "any" | one of FIELDS
  *  - fee:         "all" | "low" (≤ $30 or free) | "free" ($0 confirmed)
  *  - freeOnly:    legacy "1" → same as fee=free
- *  - kind:        "all" | UNIVERSITY | SCHOLARSHIP
+ *  - kind:        "all" | UNIVERSITY | SCHOLARSHIP | ONLINE (online degrees + certificates)
  *  - moiOnly:     "1" → only MOI-accepted (English waiver)
  *  - status:      "all" | OPEN | UPCOMING
  *  - q:           free text
@@ -96,7 +96,9 @@ export async function GET(req: NextRequest) {
       where.country = destination;
     }
   }
+  // kind: "UNIVERSITY" | "SCHOLARSHIP" (campus), "ONLINE" (both online kinds), "all"
   if (kind === "UNIVERSITY" || kind === "SCHOLARSHIP") where.kind = kind;
+  else if (kind === "ONLINE") where.kind = { in: ["ONLINE_DEGREE", "CERTIFICATE"] };
   if (moiOnly) where.moiAccepted = true;
 
   const rows: Row[] = await db.opportunity.findMany({ where });

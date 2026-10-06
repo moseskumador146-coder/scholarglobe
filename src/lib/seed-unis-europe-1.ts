@@ -149,7 +149,7 @@ export const UNIS_EUROPE_1: SeedOpportunity[] = [
     ],
     requirementsSummary: "No fee, no references, scans fine; English test standard; PhD = paid job route.",
     eligibilityNote: "Relevant bachelor's with strong quantitative content; work experience not required.",
-    officialUrl: "https://www.ntnu.edu/studies/programmes",
+    officialUrl: "https://www.ntnu.edu/",
     competitiveNote: "Marine/renewable MSc competitive; PhD positions depend on the specific project call.",
     successTips: "Email a prospective PhD supervisor with a concrete idea tied to their recent papers — NTNU hiring is supervisor-driven and email outreach works.",
   },

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useTheme } from "next-themes";
 import * as THREE from "three";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Globe2 } from "lucide-react";
 import { CONTINENT_COLORS } from "@/lib/opportunity-status";
 import type { GlobeMethods } from "react-globe.gl";
 
@@ -55,6 +56,8 @@ export function GlobeView({ points, title, subtitle, legend, onCountrySelect }: 
   // hydration-safe "mounted" flag (no setState-in-effect)
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const dark = mounted ? resolvedTheme !== "light" : true;
+  // USER REQUEST: the photoreal day ("light mode") globe is far better looking —
+  // use it in BOTH themes. Keep theme only for UI chrome (badge colors, atm glow).
 
   useEffect(() => {
     const update = () => {
@@ -89,9 +92,9 @@ export function GlobeView({ points, title, subtitle, legend, onCountrySelect }: 
     try {
       const g = globeRef.current as unknown as { globeMaterial: () => THREE.MeshPhongMaterial };
       const mat = g.globeMaterial();
-      mat.specularMap = new THREE.TextureLoader().load("/globe/earth-water.png");
-      mat.specular = new THREE.Color(dark ? "#2b3a55" : "#9db8e8");
-      mat.shininess = 16;
+      mat.specularMap = new THREE.TextureLoader().load("/globe/earth-water.jpg");
+      mat.specular = new THREE.Color(dark ? "#5a72a8" : "#9db8e8");
+      mat.shininess = 18;
       mat.needsUpdate = true;
     } catch {
       /* non-fatal */
@@ -141,32 +144,35 @@ export function GlobeView({ points, title, subtitle, legend, onCountrySelect }: 
             ref={globeRef}
             width={dims.w}
             height={dims.h}
-            // Realism pack: real NASA-style day/night texture, terrain relief, starfield sky
-            globeImageUrl={dark ? "/globe/earth-night.jpg" : "/globe/earth-blue-marble.jpg"}
-            bumpImageUrl="/globe/earth-topology.png"
-            backgroundImageUrl="/globe/night-sky.png"
+            // Photoreal "blue marble" day texture in BOTH themes (user preference) —
+            // terrain relief bump + ocean shimmer + starfield sky
+            globeImageUrl="/globe/earth-blue-marble.jpg"
+            bumpImageUrl="/globe/earth-topology.jpg"
+            backgroundImageUrl="/globe/night-sky.jpg"
             showGraticules={false}
             showAtmosphere
-            atmosphereColor={dark ? "#8b7cff" : "#4f8dff"}
-            atmosphereAltitude={0.17}
+            atmosphereColor={dark ? "#7c6cff" : "#4f8dff"}
+            atmosphereAltitude={0.16}
             onGlobeReady={() => setReady(true)}
+            // perf: cap pixel ratio on hi-dpi phones, disable alpha
+            rendererConfig={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
             // Layer 1 — glowing columns (the data)
             pointsData={points}
             pointLat={(d: object) => (d as GlobePoint).lat}
             pointLng={(d: object) => (d as GlobePoint).lng}
             pointColor={(d: object) => (d as GlobePoint).color}
-            pointAltitude={(d: object) => Math.min(0.025 + 0.02 * (d as GlobePoint).size, 0.15)}
-            pointRadius={(d: object) => Math.min(0.3 + 0.08 * (d as GlobePoint).size, 0.85)}
+            pointAltitude={(d: object) => Math.min(0.045 + 0.03 * (d as GlobePoint).size, 0.22)}
+            pointRadius={(d: object) => Math.min(0.42 + 0.1 * (d as GlobePoint).size, 1.05)}
             pointLabel={tooltip}
             onPointClick={(d: object) => onCountrySelect((d as GlobePoint).country)}
             // Layer 2 — pulsing sonar rings for visibility
             ringsData={rings}
             ringLat={(d: object) => (d as { lat: number }).lat}
             ringLng={(d: object) => (d as { lng: number }).lng}
-            ringColor={(d: object) => (t: number) => `${(d as { color: string }).color}${Math.round((1 - t) * 200).toString(16).padStart(2, "0")}`}
-            ringMaxRadius={3.2}
-            ringPropagationSpeed={2.4}
-            ringRepeatPeriod={1900}
+            ringColor={(d: object) => (t: number) => `${(d as { color: string }).color}${Math.round((1 - t) * 235).toString(16).padStart(2, "0")}`}
+            ringMaxRadius={4}
+            ringPropagationSpeed={2.6}
+            ringRepeatPeriod={1600}
             // Layer 3 — always-visible country badges
             htmlElementsData={points}
             htmlLat={(d: object) => (d as GlobePoint).lat}
@@ -177,6 +183,7 @@ export function GlobeView({ points, title, subtitle, legend, onCountrySelect }: 
               const el = document.createElement("button");
               el.className = "sg-marker";
               el.style.setProperty("--marker-c", p.color);
+              el.style.setProperty("--marker-scale", dark ? "1.08" : "1");
               el.setAttribute("aria-label", `${p.name} — ${p.size} opportunities — click to filter`);
               el.title = `${p.name} · ${p.size} — click to filter`;
               el.innerHTML = `<span>${flagOf(p.countryCode)}</span><b>${p.size}</b>`;
@@ -188,7 +195,13 @@ export function GlobeView({ points, title, subtitle, legend, onCountrySelect }: 
             }}
           />
         ) : (
-          <Skeleton className="h-[420px] w-full rounded-none bg-muted" />
+          <div className="flex h-[420px] w-full flex-col items-center justify-center gap-3 bg-muted/40">
+            <div className="relative">
+              <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
+              <Globe2 className="absolute inset-0 m-auto h-4 w-4 text-primary" />
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">Loading realistic globe…</p>
+          </div>
         )}
       </div>
 

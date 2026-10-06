@@ -16,7 +16,6 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useCopilot } from "@/lib/copilot-store";
 import {
-  Award,
   BadgeCheck,
   BookOpenCheck,
   CalendarClock,
@@ -25,7 +24,6 @@ import {
   ExternalLink,
   FileText,
   Globe2,
-  GraduationCap,
   Handshake,
   Landmark,
   Languages,
@@ -133,6 +131,20 @@ const FUNDING_LABEL: Record<string, string> = {
   SELF_FUNDED: "Self-funded",
 };
 
+/** Kind → icon + label used on cards, chips and the tracker. */
+export function kindMeta(kind: string): { icon: string; label: string } {
+  switch (kind) {
+    case "SCHOLARSHIP":
+      return { icon: "🏆", label: "Scholarship" };
+    case "ONLINE_DEGREE":
+      return { icon: "💻", label: "Online degree" };
+    case "CERTIFICATE":
+      return { icon: "📜", label: "Free certificate" };
+    default:
+      return { icon: "🎓", label: "University / Program" };
+  }
+}
+
 function statusStyles(status: string): string {
   switch (status) {
     case "OPEN":
@@ -186,15 +198,14 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">
-                {op.kind === "SCHOLARSHIP" ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Award className="h-3.5 w-3.5 text-warning" /> Scholarship
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <GraduationCap className="h-3.5 w-3.5 text-primary" /> University / Program
-                  </span>
-                )}
+                {(() => {
+                  const k = kindMeta(op.kind);
+                  return (
+                    <span className="inline-flex items-center gap-1">
+                      <span aria-hidden>{k.icon}</span> {k.label}
+                    </span>
+                  );
+                })()}
               </span>
               <span aria-hidden>·</span>
               <span className="inline-flex items-center gap-1">

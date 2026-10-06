@@ -9,7 +9,7 @@
  *   • one-tap emails (fee waiver, MOI waiver, follow-up) via the Email chooser
  */
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,7 +34,7 @@ import {
   type CopilotApplication,
 } from "@/lib/copilot-store";
 import { buildEmail, type EmailDraft } from "@/lib/email-templates";
-import { flagEmoji } from "@/components/opportunity-card";
+import { flagEmoji, kindMeta } from "@/components/opportunity-card";
 import { EmailSendDialog } from "@/components/copilot/email-send-dialog";
 import {
   CalendarClock,
@@ -56,13 +56,26 @@ function daysLeft(iso: string | null): number | null {
 }
 
 export function SubmissionKits() {
-  const { apps, updateApplication, removeApplication, profile } = useCopilot();
+  const { apps, updateApplication, removeApplication, profile, docs } = useCopilot();
   const { toast } = useToast();
   const [emailOpen, setEmailOpen] = useState(false);
   const [draft, setDraft] = useState<EmailDraft | null>(null);
   const [emailTitle, setEmailTitle] = useState<string | undefined>(undefined);
-  const [expanded, setExpanded] = useState<string | null>(apps[0]?.slug ?? null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
+
+  // Kits keep themselves in sync with the vault: a checklist item is done when
+  // the user ticked it OR a matching document already exists in the vault.
+  const vaultTypes = useMemo(() => new Set(docs.map((d) => d.type)), [docs]);
+
+  // Auto-expand the first kit once applications load (and keep it valid).
+  useEffect(() => {
+    if (apps.length === 0) {
+      if (expanded !== null) setExpanded(null);
+      return;
+    }
+    if (!apps.some((a) => a.slug === expanded)) setExpanded(apps[0].slug);
+  }, [apps, expanded]);
 
   const openEmail = (app: CopilotApplication, kind: Parameters<typeof buildEmail>[0], title: string, note?: string) => {
     setDraft(buildEmail(kind, profile, appToMinimal(app), { note }));
@@ -117,11 +130,14 @@ export function SubmissionKits() {
   return (
     <div className="space-y-3">
       {sorted.map((app) => {
-        const done = app.reqDocs.filter((d) => app.checklist[d.type]).length;
+        const autoCovered = app.reqDocs.filter((d) => vaultTypes.has(d.type)).length;
+        const done = app.reqDocs.filter((d) => app.checklist[d.type] || vaultTypes.has(d.type)).length;
         const pct = Math.round((done / Math.max(1, app.reqDocs.length)) * 100);
         const dl = daysLeft(app.deadlineIso);
         const isOpen = expanded === app.slug;
         const statusIdx = STATUS_ORDER.indexOf(app.status);
+        const allCovered = done >= app.reqDocs.length;
+        const suggestReady = allCovered && (app.status === "planned" || app.status === "gathering");
 
         return (
           <Card key={app.slug} className="overflow-hidden">
@@ -132,7 +148,7 @@ export function SubmissionKits() {
               onClick={() => setExpanded(isOpen ? null : app.slug)}
               aria-expanded={isOpen}
             >
-              <span className="text-2xl">{app.kind === "SCHOLARSHIP" ? "🏆" : "🎓"}</span>
+              <span className="text-2xl">{kindMeta(app.kind).icon}</span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-bold text-foreground">
                   {flagEmoji(app.countryCode)} {app.name}
@@ -142,6 +158,11 @@ export function SubmissionKits() {
                 </span>
               </span>
               <span className="flex shrink-0 flex-wrap items-center gap-2">
+                {autoCovered > 0 && (
+                  <Badge variant="outline" className="border-success/50 text-[10px] font-semibold text-success">
+                    📁 {autoCovered} doc{autoCovered === 1 ? "" : "s"} in vault
+                  </Badge>
+                )}
                 {dl !== null && (
                   <Badge
                     variant="outline"
@@ -208,28 +229,46 @@ export function SubmissionKits() {
                       <label
                         key={r.type}
                         className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-2.5 transition ${
-                          app.checklist[r.type] ? "border-success/50 bg-success/10" : "border-border bg-secondary/30 hover:border-primary/40"
+                          app.checklist[r.type] || vaultTypes.has(r.type) ? "border-success/50 bg-success/10" : "border-border bg-secondary/30 hover:border-primary/40"
                         }`}
                       >
                         <Checkbox
                           className="mt-0.5"
-                          checked={!!app.checklist[r.type]}
+                          checked={!!app.checklist[r.type] || vaultTypes.has(r.type)}
+                          disabled={vaultTypes.has(r.type)}
                           onCheckedChange={(v) => updateApplication(app.slug, { checklist: { ...app.checklist, [r.type]: !!v } })}
                           aria-label={`Mark ${r.label} ready`}
                         />
                         <span className="min-w-0">
                           <span className="block text-[11px] font-semibold text-foreground">
                             {DOC_TYPE_ICON[r.type]} {r.label}
+                            {vaultTypes.has(r.type) && <span className="ml-1 font-normal text-success">· in vault ✓</span>}
                           </span>
                           <span className="block text-[10px] leading-snug text-muted-foreground">{r.note}</span>
                         </span>
                       </label>
                     ))}
                   </div>
-                  {done < app.reqDocs.length && (
-                    <p className="mt-2 text-[10px] text-muted-foreground">
-                      Missing {app.reqDocs.length - done} — upload files in the <span className="font-semibold text-foreground">Documents</span> tab; coverage updates automatically.
+                  {allCovered ? (
+                    <p className="mt-2 text-[10px] font-semibold text-success">
+                      All {app.reqDocs.length} documents ready — this kit is complete. 🎉
                     </p>
+                  ) : (
+                    <p className="mt-2 text-[10px] text-muted-foreground">
+                      Missing {app.reqDocs.length - done} — upload files in the <span className="font-semibold text-foreground">Documents</span> tab and the checklist ticks itself automatically.
+                    </p>
+                  )}
+                  {suggestReady && (
+                    <Button
+                      size="sm"
+                      className="mt-2 gap-1.5 bg-success text-success-foreground hover:bg-success/90"
+                      onClick={() => {
+                        updateApplication(app.slug, { status: "ready" });
+                        toast({ title: "Marked Ready to submit 🚀", description: "Open the official portal, paste your answers and submit." });
+                      }}
+                    >
+                      <Sparkles className="h-3.5 w-3.5" /> Documents complete — mark Ready to submit
+                    </Button>
                   )}
                 </div>
 

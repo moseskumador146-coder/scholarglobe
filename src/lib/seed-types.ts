@@ -6,7 +6,7 @@ export interface SeedStep {
 export interface SeedOpportunity {
   name: string;
   slug?: string; // stable id for uni↔scholarship linking (auto-slugified from name if omitted)
-  kind: "SCHOLARSHIP" | "UNIVERSITY";
+  kind: "SCHOLARSHIP" | "UNIVERSITY" | "ONLINE_DEGREE" | "CERTIFICATE";
   provider: string;
   country: string;
   countryCode: string; // ISO2 lowercase
@@ -14,7 +14,7 @@ export interface SeedOpportunity {
   city?: string;
   lat: number;
   lng: number;
-  levels: Array<"undergraduate" | "masters" | "phd">;
+  levels: Array<"undergraduate" | "masters" | "phd" | "certificate">;
   fields: string[]; // ["any"] = all fields
   feeAmount: number;
   feeCurrency: string;
@@ -70,7 +70,7 @@ export const FIELDS = [
   "energy",
 ] as const;
 
-export const LEVELS = ["undergraduate", "masters", "phd"] as const;
+export const LEVELS = ["undergraduate", "masters", "phd", "certificate"] as const;
 
 export function csvLevels(levels: SeedOpportunity["levels"]): string {
   return levels.join(",");

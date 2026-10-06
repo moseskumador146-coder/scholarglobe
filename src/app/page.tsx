@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -79,6 +80,7 @@ const LEVELS = [
   { value: "undergraduate", label: "Undergraduate (Bachelor's)" },
   { value: "masters", label: "Master's" },
   { value: "phd", label: "PhD / Doctoral" },
+  { value: "certificate", label: "Professional certificate" },
 ];
 
 const FIELDS = [
@@ -103,6 +105,7 @@ const FIELDS = [
 const NAV_LINKS = [
   { href: "#search", label: "Search" },
   { href: "#copilot", label: "Apply Co-Pilot" },
+  { href: "/online", label: "Online & certificates" },
   { href: "#globes", label: "3 Globes" },
   { href: "#open-now", label: "Open now" },
   { href: "#upcoming", label: "Upcoming" },
@@ -125,6 +128,7 @@ interface Stats {
   moi: number;
   universities: number;
   scholarships: number;
+  online: number;
   freeUnis: number;
   lowFeeUnis: number;
   linked: number;
@@ -253,9 +257,9 @@ export default function Home() {
 
           <nav className="hidden items-center gap-6 text-sm font-medium text-muted-foreground lg:flex">
             {NAV_LINKS.map((l) => (
-              <a key={l.href} href={l.href} className="transition hover:text-foreground">
+              <Link key={l.href} href={l.href} className="transition hover:text-foreground">
                 {l.label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -281,14 +285,14 @@ export default function Home() {
           <nav className="glass border-t border-border/70 px-4 py-3 lg:hidden">
             <div className="grid gap-1">
               {NAV_LINKS.map((l) => (
-                <a
+                <Link
                   key={l.href}
                   href={l.href}
                   onClick={() => setMenuOpen(false)}
                   className="rounded-lg px-3 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent"
                 >
                   {l.label}
-                </a>
+                </Link>
               ))}
             </div>
           </nav>
@@ -315,7 +319,7 @@ export default function Home() {
               <Badge variant="outline" className="mb-5 whitespace-normal border-primary/40 bg-primary/5 px-3 py-1 text-left leading-relaxed text-primary">
                 <Sparkles className="mr-1 h-3 w-3 shrink-0" />{" "}
                 {stats
-                  ? `${stats.free} confirmed $0-fee programs · ${stats.lowFeeUnis} universities ≤ $30 to apply · ${stats.linked} uni↔scholarship links`
+                  ? `${stats.free} confirmed $0-fee programs · ${stats.lowFeeUnis} universities ≤ $30 to apply · ${stats.linked} uni↔scholarship links · ${stats.online} free online offerings`
                   : "Curated worldwide"}{" "}
                 · {nowMonth}
               </Badge>
@@ -480,6 +484,21 @@ export default function Home() {
                     >
                       Ghanaian → apply to both: university ≤$30 + linked scholarship
                     </button>
+                    <button
+                      className="rounded-full border border-border bg-secondary/50 px-3 py-1.5 text-foreground transition hover:border-primary hover:text-primary"
+                      onClick={() => {
+                        setOrigin("Ghana"); setFee("free"); setMoiOnly(false);
+                        runSearch({ destination: "all", level: "certificate", field: "any" });
+                      }}
+                    >
+                      Ghanaian → free professional certificates (Google, IBM, FAO…)
+                    </button>
+                    <Link
+                      href="/online"
+                      className="rounded-full border border-teal-500/50 bg-teal-500/10 px-3 py-1.5 font-semibold text-teal-700 transition hover:border-teal-500 hover:bg-teal-500/20 dark:text-teal-300"
+                    >
+                      💻 Free online degrees &amp; certificates — dedicated page →
+                    </Link>
                   </div>
                 </CardContent>
               </Card>

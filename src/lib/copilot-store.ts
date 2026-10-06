@@ -293,9 +293,27 @@ export interface MinimalOp {
 
 /** Derive the full document checklist a given opportunity needs. */
 export function requiredDocs(op: MinimalOp): ReqDoc[] {
+  const isCert = op.kind === "CERTIFICATE";
+
+  // Free professional certificates need almost nothing — that's their point.
+  if (isCert) {
+    return [
+      { type: "passport", label: "ID / passport scan", note: "Some platforms verify identity for certificates — have a scan handy." },
+      {
+        type: "transcript",
+        label: "Prior study proof (optional)",
+        note: "Usually NOT needed — most free certificate platforms only need an email account.",
+      },
+    ];
+  }
+
+  const isOnline = op.kind === "ONLINE_DEGREE";
+
   const docs: ReqDoc[] = [
-    { type: "passport", label: "Passport / national ID", note: "Valid at least 6 months beyond enrollment." },
-    { type: "photo", label: "Passport-style photo", note: "White background, recent (< 6 months)." },
+    { type: "passport", label: "Passport / national ID", note: isOnline ? "Scan usually enough to enroll — original needed for on-site exams." : "Valid at least 6 months beyond enrollment." },
+    ...(isOnline
+      ? []
+      : [{ type: "photo" as DocType, label: "Passport-style photo", note: "White background, recent (< 6 months)." }]),
     {
       type: "transcript",
       label: op.unofficialTranscripts ? "Transcript (unofficial OK)" : "Official transcript",
@@ -303,12 +321,13 @@ export function requiredDocs(op: MinimalOp): ReqDoc[] {
         ? op.transcriptsNote ?? "Scanned copy accepted at application stage."
         : op.transcriptsNote ?? "Certified / officially issued copy required.",
     },
-    {
-      type: "degree",
-      label: "Degree certificate",
-      note: "Or expected-graduation letter if still studying.",
-    },
-    { type: "cv", label: "CV / résumé", note: "Max 2 pages, education + achievements first." },
+    ...(((op as { levels?: string }).levels ?? "").includes("masters") ||
+    ((op as { levels?: string }).levels ?? "").includes("phd")
+      ? [{ type: "degree" as DocType, label: "Degree certificate", note: "Or expected-graduation letter if still studying." }]
+      : []),
+    ...(isOnline
+      ? []
+      : [{ type: "cv" as DocType, label: "CV / résumé", note: "Max 2 pages, education + achievements first." }]),
   ];
   if (op.essayRequired) {
     docs.push({ type: "sop", label: "Motivation letter / essay", note: op.essayNote ?? "Tailor it to this program." });
