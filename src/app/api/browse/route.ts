@@ -10,19 +10,26 @@ export const runtime = "nodejs";
  * in-app browser can render it in an iframe AND the Co-Pilot can read the
  * screen, autofill profile data, and flag CAPTCHAs/payments/uploads.
  *
- *  GET/POST /api/browse?tab=<tabId>&u=<url-encoded-target>
+ *  GET/POST /api/browse?tab=<tabId>&u=<url-encoded-target>&d=<dest>
  *
  *  • HTML → rewritten (links/assets/forms → proxy) + copilot-inject.js added
  *  • CSS → url()/@import rewritten
  *  • everything else → streamed through with original content-type
- *  • cookies kept per-tab in memory (logins work inside a session)
+ *  • cookies kept per-tab in memory — captured on EVERY redirect hop, so
+ *    login flows (POST → 302 Set-Cookie → 200) survive
+ *  • browser-like header set (sec-ch-ua / sec-fetch-*) per resource dest —
+ *    many bot-walls score these headers
  *  • CSP / X-Frame-Options stripped so pages render in the iframe
+ *  • bot-challenge responses (Cloudflare etc.) are replaced by a friendly
+ *    "open directly" page the app detects and surfaces as an overlay
  */
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 const MAX_HTML_BYTES = 15 * 1024 * 1024;
+const MAX_HOPS = 10;
+const FETCH_TIMEOUT = 30_000;
 
 // ── per-tab cookie jar (lives with the server process) ───────────────
 const JARS = new Map<string, Map<string, Map<string, string>>>(); // tabId -> host -> name -> value
@@ -45,7 +52,7 @@ function cookiesFor(tab: string, host: string): string {
   const jar = jarFor(tab);
   const parts: string[] = [];
   for (const [jarHost, cookies] of jar.entries()) {
-    if (host === jarHost || host.endsWith(`.${jarHost}`)) {
+    if (host === jarHost || host.endsWith(`.${jarHost}`) || jarHost.endsWith(`.${host}`)) {
       for (const [name, value] of cookies.entries()) parts.push(`${name}=${value}`);
     }
   }
@@ -71,6 +78,17 @@ function storeCookies(tab: string, host: string, setCookies: string[]) {
   }
 }
 
+function getSetCookies(res: Response): string[] {
+  try {
+    const getter = (res.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
+    if (typeof getter === "function") return getter.call(res.headers);
+  } catch {
+    /* ignore */
+  }
+  const one = res.headers.get("set-cookie");
+  return one ? [one] : [];
+}
+
 // ── SSRF guard ───────────────────────────────────────────────────────
 const BLOCKED_HOST =
   /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00|\[?fdfe|.*\.local)$/i;
@@ -89,7 +107,12 @@ function safeTarget(raw: string): URL | null {
 // ── URL → proxy rewriting ────────────────────────────────────────────
 const SKIP_RE = /^(data:|javascript:|mailto:|tel:|blob:|about:|#)/i;
 
-function makeProx(tab: string, finalUrl: string) {
+interface ElLike {
+  tagName: string;
+  attribs: Record<string, string>;
+}
+
+function makeProx(tab: string, finalUrl: string, dest?: string) {
   return (raw: string | undefined): string | undefined => {
     if (!raw) return raw;
     const val = String(raw).trim();
@@ -97,11 +120,28 @@ function makeProx(tab: string, finalUrl: string) {
     try {
       const abs = new URL(val, finalUrl).toString();
       if (!abs.startsWith("http")) return raw;
-      return `/api/browse?tab=${encodeURIComponent(tab)}&u=${encodeURIComponent(abs)}`;
+      const sp = new URLSearchParams({ tab, u: abs });
+      if (dest) sp.set("d", dest);
+      return `/api/browse?${sp.toString()}`;
     } catch {
       return raw;
     }
   };
+}
+
+/** per-attribute destination used for realistic sec-fetch-* headers */
+function destForTag(tag: string, attr: string, el: ElLike): string | undefined {
+  if (tag === "script" && attr === "src") return "script";
+  if (tag === "link" && attr === "href") {
+    const rel = (el.attribs["rel"] || "").toLowerCase();
+    if (rel.includes("stylesheet")) return "style";
+    if (rel.includes("icon") || rel.includes("manifest")) return "image";
+    return undefined;
+  }
+  if ((tag === "img" || tag === "source" || tag === "embed") && attr === "src") return "image";
+  if ((tag === "video" || tag === "audio") && (attr === "src" || attr === "poster")) return "media";
+  if (tag === "iframe" && attr === "src") return "document";
+  return undefined;
 }
 
 function rewriteSrcset(srcset: string, prox: (u: string) => string | undefined): string {
@@ -140,25 +180,51 @@ function detectCharset(buffer: Buffer, contentType: string): string {
   return meta ? meta[1].toLowerCase() : "utf-8";
 }
 
+// ── bot-challenge detection ──────────────────────────────────────────
+// Strict markers — safe to match even on 200 pages.
+const CHALLENGE_RE =
+  /just a moment|__cf_chl|challenge-platform|cf-browser-verification|attention required|incapsula|datadome|captcha-delivery|perimeterx|px-captcha|kasada|sucuri cloudproxy/i;
+// Denial phrases — only trusted on 403/429-class statuses to avoid false positives.
+const DENIAL_RE = /access denied|you don'?t have permission|forbidden/i;
+
+function isChallenge(status: number, body: string): boolean {
+  if (status === 403 || status === 429) {
+    return CHALLENGE_RE.test(body.slice(0, 8000)) || DENIAL_RE.test(body.slice(0, 2000));
+  }
+  if (status === 503) return true;
+  if (status === 200) return CHALLENGE_RE.test(body.slice(0, 4000));
+  return false;
+}
+
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function errorPage(title: string, detail: string, target: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Co-Pilot — ${title}</title>
+  const retry = `/api/browse?u=${encodeURIComponent(target)}&cb=${Date.now()}`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Co-Pilot — ${esc(title)}</title>
 <style>
   body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#0d1126;color:#e6e9f4;
        display:flex;align-items:center;justify-content:center;min-height:100vh}
-  .card{max-width:520px;padding:28px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
+  .card{max-width:540px;padding:28px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12)}
   h1{font-size:18px;margin:0 0 8px}p{font-size:13px;line-height:1.6;color:#b7bdd4;margin:0 0 14px}
   a{color:#8b93ff;font-weight:600;text-decoration:none}
-  .btn{display:inline-block;margin-top:6px;padding:8px 14px;border-radius:10px;background:#6366f1;color:#fff;font-size:13px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+  .btn{display:inline-block;padding:9px 15px;border-radius:10px;background:#6366f1;color:#fff;font-size:13px}
+  .btn2{display:inline-block;padding:9px 15px;border-radius:10px;background:rgba(255,255,255,.1);color:#e6e9f4;font-size:13px}
 </style></head><body><div class="card">
-<h1>${title}</h1><p>${detail}</p>
+<div id="sg-err" data-sg-real="${esc(target)}" data-sg-title="${esc(title)}"></div>
+<h1>${esc(title)}</h1><p>${esc(detail)}</p>
 <p>The Co-Pilot still has your documents, answers and checklist — nothing is lost.</p>
-<a class="btn" href="${target}" target="_blank" rel="noopener noreferrer">Open this site directly in a new tab ↗</a>
+<div class="row">
+<a class="btn" href="${esc(target)}" target="_blank" rel="noopener noreferrer">Open site directly ↗</a>
+<a class="btn2" href="${esc(retry)}">Try again</a>
+</div>
 </div></body></html>`;
 }
 
 // ── HTML transform ───────────────────────────────────────────────────
 function transformHtml(html: string, tab: string, finalUrl: string): string {
-  const prox = makeProx(tab, finalUrl);
   const $ = cheerio.load(html);
 
   // drop constructs that break proxying
@@ -175,25 +241,30 @@ function transformHtml(html: string, tab: string, finalUrl: string): string {
     $(`[${attr}]`).each((_, el) => {
       const val = $(el).attr(attr);
       if (!val) return;
-      const p = prox(val);
+      const elLike = el as unknown as ElLike;
+      const dest = destForTag(elLike.tagName.toLowerCase(), attr, elLike);
+      const p = makeProx(tab, finalUrl, dest)(val);
       if (p) $(el).attr(attr, p);
     });
   }
   $("[srcset]").each((_, el) => {
     const val = $(el).attr("srcset");
-    if (val) $(el).attr("srcset", rewriteSrcset(val, prox));
+    if (val) $(el).attr("srcset", rewriteSrcset(val, makeProx(tab, finalUrl, "image")));
   });
   $("[style]").each((_, el) => {
     const val = $(el).attr("style");
-    if (val && val.includes("url(")) $(el).attr("style", rewriteCssUrls(val, prox));
+    if (val && val.includes("url(")) $(el).attr("style", rewriteCssUrls(val, makeProx(tab, finalUrl)));
   });
   $("style").each((_, el) => {
     const val = $(el).html();
-    if (val && val.includes("url(")) $(el).html(rewriteCssUrls(val, prox));
+    if (val && val.includes("url(")) $(el).html(rewriteCssUrls(val, makeProx(tab, finalUrl)));
   });
 
-  // keep top-level navigation inside our tab (handled by injected script)
-  $("a[target='_blank'], a[target=_blank]").removeAttr("target");
+  // keep top-level navigation inside our tab (handled by injected script);
+  // anchors the page itself marks external stay untouched
+  $("a[target='_blank'], a[target=_blank]").each((_, el) => {
+    if (!$(el).hasClass("sg-external")) $(el).removeAttr("target");
+  });
 
   // inject the co-pilot helper
   const inject = `<script src="/copilot-inject.js" data-sg-final="${finalUrl.replace(/"/g, "&quot;")}" data-sg-tab="${tab}"></script>`;
@@ -204,7 +275,62 @@ function transformHtml(html: string, tab: string, finalUrl: string): string {
   return $.html();
 }
 
-// ── shared fetch+serve ───────────────────────────────────────────────
+// ── per-dest browser-like headers ────────────────────────────────────
+function headersFor(dest: string | null, target: URL, cookie: string, method: "GET" | "POST", req: NextRequest): Record<string, string> {
+  const isDoc = dest === "document" || dest === null;
+  const h: Record<string, string> = {
+    "user-agent": UA,
+    "accept-language": "en-US,en;q=0.9",
+    "sec-ch-ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    referer: `${target.protocol}//${target.hostname}/`,
+  };
+  if (isDoc) {
+    h.accept =
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7";
+    h["sec-fetch-dest"] = "document";
+    h["sec-fetch-mode"] = "navigate";
+    h["sec-fetch-site"] = "none";
+    h["sec-fetch-user"] = "?1";
+    h["upgrade-insecure-requests"] = "1";
+  } else if (dest === "script") {
+    h.accept = "*/*";
+    h["sec-fetch-dest"] = "script";
+    h["sec-fetch-mode"] = "no-cors";
+    h["sec-fetch-site"] = "same-origin";
+  } else if (dest === "style") {
+    h.accept = "text/css,*/*;q=0.1";
+    h["sec-fetch-dest"] = "style";
+    h["sec-fetch-mode"] = "no-cors";
+    h["sec-fetch-site"] = "same-origin";
+  } else if (dest === "image") {
+    h.accept = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8";
+    h["sec-fetch-dest"] = "image";
+    h["sec-fetch-mode"] = "no-cors";
+    h["sec-fetch-site"] = "same-origin";
+  } else {
+    h.accept = "*/*";
+    if (dest) h["sec-fetch-dest"] = dest;
+    h["sec-fetch-mode"] = "no-cors";
+    h["sec-fetch-site"] = "same-origin";
+  }
+  // runtime fetch()/XHR from the injected patch — real CORS-style request
+  if (req.headers.get("x-sg-fetch")) {
+    h["sec-fetch-dest"] = "empty";
+    h["sec-fetch-mode"] = "cors";
+    h["sec-fetch-site"] = "same-origin";
+    h.accept = req.headers.get("accept") || "*/*";
+  }
+  if (cookie) h.cookie = cookie;
+  if (method === "POST") {
+    const ct = req.headers.get("content-type");
+    if (ct) h["content-type"] = ct;
+  }
+  return h;
+}
+
+// ── shared fetch+serve (manual redirect loop keeps every hop's cookies) ──
 async function serve(req: NextRequest, method: "GET" | "POST") {
   const sp = req.nextUrl.searchParams;
   const tab = (sp.get("tab") || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || "default";
@@ -219,62 +345,95 @@ async function serve(req: NextRequest, method: "GET" | "POST") {
   const target = safeTarget(targetRaw);
   if (!target) {
     return new NextResponse(
-      errorPage("Address not allowed", "The Co-Pilot Browser can only open http(s) web pages.", "https://www.google.com"),
+      errorPage("Address not allowed", "The Co-Pilot Browser can only open http(s) web pages.", "https://duckduckgo.com/"),
       { status: 400, headers: { "content-type": "text/html; charset=utf-8" } }
     );
   }
 
+  const destParam = sp.get("d") || (req.headers.get("x-sg-fetch") ? "fetch" : null);
   let body: ArrayBuffer | undefined;
   if (method === "POST") body = await req.arrayBuffer();
 
-  const host = target.hostname;
-  const headers: Record<string, string> = {
-    "user-agent": UA,
-    "accept-language": "en-US,en;q=0.9",
-    accept: "*/*",
-  };
-  const cookie = cookiesFor(tab, host);
-  if (cookie) headers.cookie = cookie;
-  if (method === "POST") {
-    const ct = req.headers.get("content-type");
-    if (ct) headers["content-type"] = ct;
-  }
+  const started = Date.now();
+  let currentUrl = target.toString();
+  let currentMethod = method;
+  let currentBody: ArrayBuffer | undefined = body;
+  let res: Response | null = null;
 
-  let res: Response;
   try {
-    res = await fetch(target.toString(), {
-      method,
-      headers,
-      body: method === "POST" ? body : undefined,
-      redirect: "follow",
-      signal: AbortSignal.timeout(30_000),
-    });
+    for (let hop = 0; hop < MAX_HOPS; hop++) {
+      const u = safeTarget(currentUrl);
+      if (!u) {
+        return new NextResponse(
+          errorPage("Redirect not allowed", "The site tried to redirect to a non-web address.", target.toString()),
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
+        );
+      }
+      const ck = cookiesFor(tab, u.hostname);
+      const hopHeaders = headersFor(destParam, u, ck, currentMethod, req);
+      res = await fetch(u.toString(), {
+        method: currentMethod,
+        headers: hopHeaders,
+        body: currentMethod !== "POST" ? undefined : currentBody,
+        redirect: "manual",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT),
+      });
+      const finalHost = u.hostname;
+      try {
+        const hops = getSetCookies(res);
+        if (hops.length) storeCookies(tab, finalHost, hops);
+      } catch {
+        /* ignore cookie errors */
+      }
+      const st = res.status;
+      if (st === 301 || st === 302 || st === 303 || st === 307 || st === 308) {
+        const loc = res.headers.get("location");
+        try {
+          await res.arrayBuffer();
+        } catch {
+          /* drain */
+        }
+        if (!loc) break;
+        const next = new URL(loc, u.toString()).toString();
+        if (st === 307 || st === 308) {
+          // keep method + body
+        } else {
+          currentMethod = "GET";
+          currentBody = undefined;
+        }
+        currentUrl = next;
+        if (Date.now() - started > 45_000) break;
+        continue;
+      }
+      break;
+    }
   } catch {
     return new NextResponse(
       errorPage(
         "This site did not respond",
-        `${host} timed out or refused the connection — it may block automated access or be temporarily down.`,
+        `${target.hostname} timed out or refused the connection — it may be temporarily down or may block access from server networks.`,
         target.toString()
       ),
       { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
     );
   }
-
-  const finalUrl = res.url || target.toString();
-  try {
-    const getter = (res.headers as unknown as { getSetCookie?: () => string[] }).getSetCookie;
-    if (typeof getter === "function") storeCookies(tab, new URL(finalUrl).hostname, getter.call(res.headers));
-  } catch {
-    /* ignore cookie errors */
+  if (!res) {
+    return new NextResponse(
+      errorPage("This site did not respond", `${target.hostname} could not be reached.`, target.toString()),
+      { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
+    );
   }
 
+  const finalUrl = res.url && res.url !== "" ? res.url : currentUrl;
   const contentType = res.headers.get("content-type") || "application/octet-stream";
   const baseHeaders: Record<string, string> = {
     "cache-control": "no-store",
     "x-sg-final-url": finalUrl,
   };
+  const cdisp = res.headers.get("content-disposition");
+  if (cdisp) baseHeaders["content-disposition"] = cdisp;
 
-  // HTML → transform
+  // HTML → transform (or replace bot-challenges with a friendly page)
   if (contentType.includes("text/html") || contentType.includes("xhtml")) {
     try {
       const buf = Buffer.from(await res.arrayBuffer());
@@ -286,14 +445,24 @@ async function serve(req: NextRequest, method: "GET" | "POST") {
       } catch {
         html = buf.toString("utf-8");
       }
+      if (isChallenge(res.status, html)) {
+        return new NextResponse(
+          errorPage(
+            "This site blocks automated access",
+            `${new URL(finalUrl).hostname} is protected by a bot-security wall (Cloudflare or similar) that only your own browser can pass. Open it directly — then use your Co-Pilot vault and answers alongside it.`,
+            finalUrl
+          ),
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
+        );
+      }
       const out = transformHtml(html, tab, finalUrl);
       return new NextResponse(out, {
-        status: res.status,
+        status: 200,
         headers: { ...baseHeaders, "content-type": "text/html; charset=utf-8" },
       });
     } catch {
       return new NextResponse(
-        errorPage("This page could not be prepared", `${host} sent a page the Co-Pilot could not read.`, finalUrl),
+        errorPage("This page could not be prepared", `${target.hostname} sent a page the Co-Pilot could not read.`, finalUrl),
         { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } }
       );
     }
@@ -305,7 +474,7 @@ async function serve(req: NextRequest, method: "GET" | "POST") {
       const css = await res.text();
       const out = rewriteCssUrls(css, makeProx(tab, finalUrl));
       return new NextResponse(out, {
-        status: res.status,
+        status: 200,
         headers: { ...baseHeaders, "content-type": "text/css; charset=utf-8" },
       });
     } catch {
@@ -320,7 +489,8 @@ async function serve(req: NextRequest, method: "GET" | "POST") {
   if (cl) pass.set("content-length", cl);
   pass.set("cache-control", "no-store");
   pass.set("x-sg-final-url", finalUrl);
-  return new NextResponse(res.body, { status: res.status, headers: pass });
+  if (cdisp) pass.set("content-disposition", cdisp);
+  return new NextResponse(res.body, { status: 200, headers: pass });
 }
 
 export async function GET(req: NextRequest) {

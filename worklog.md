@@ -150,3 +150,25 @@ Work Log:
 Stage Summary:
 - Project live on GitHub (moseskumador146-coder/scholarglobe, main).
 - Co-Pilot browser new-tab experience verified end-to-end; fixed a real stale-read bug that broke autofill on restored/background tabs. App state, autofill, alerts and AI assists now always operate on the currently visible page.
+
+---
+Task ID: 8
+Agent: Super Z (main agent)
+Task: User reports — browser copilot can't read the page / give help & directions, other functions not working, some sites won't open at all. Also: push system code to GitHub (verified already synced; this task pushes the fixes).
+
+Work Log:
+- Probed 15 real scholarship/university sites through the proxy + direct fetch with minimal vs full browser headers. Root causes found:
+  • daad.de / apply.abertay.ac.uk refuse datacenter IPs at network level (unfixable by headers)
+  • chevening (Akamai "Access Denied"), mastersportal, applyweb, afterschoolafrica, studying-in-germany = TLS-fingerprint/JS bot walls
+  • Runtime traffic (SPA fetch/XHR/links/pushState) bypassed the proxy → pages looked broken/empty → "can't read the page"
+- /api/browse route rebuilt:
+  1) Manual redirect loop (bun fetch redirect:"manual" exposes real headers) — Set-Cookie captured on EVERY hop, so login POSTs (302 Set-Cookie → 200) now keep sessions; 307/308 preserve method+body.
+  2) Full browser-like header set (sec-ch-ua, sec-fetch-dest/mode/site per resource type via d= param, referer, realistic Accept) — many header-scoring bot walls pass.
+  3) Bot-challenge detection (Cloudflare/Akamai/Incapsula/DataDome markers; denial phrases only on 403/429) → replaced by friendly "This site blocks automated access" page with #sg-err marker + data-sg-real, Open-direct + Try-again buttons.
+  4) content-disposition passthrough for downloads; SSRF guard on every redirect hop.
+- public/copilot-inject.js rebuilt: fetch()/XHR patched to route absolute+relative URLs through the proxy (SPA data loads now work); runtime-inserted links/forms rewritten before navigation; pushState/replaceState rewritten to proxy URLs (iframe stays same-origin + readable); window.open now resolves against the real final URL; submit-capture for runtime forms.
+- copilot-browser.tsx: per-tab blocked state detected from #sg-err marker (site blocks), escaped iframes (page JS-redirects itself out of proxy → "Reopen through Co-Pilot"), and cross-origin access failures → full-screen overlay card with Open site directly / Try again / Reopen through Co-Pilot; navigate() clears it. askGuide/smartMap now toast "Can't read this page" instead of failing silently.
+- E2E verified: OpportunitiesForAfricans loads (13 fields read), AI guide returned full "Do now / Needs you" directions for the real page, AI smart map + Instant fill wrote name/phone/email into httpbin form, chevening shows the blocked overlay with both buttons, daad/abertay get friendly unreachable pages, all 403-bot-wall sites now get the friendly page instead of a broken challenge, console 0 errors, lint clean, tsc 0 src errors.
+
+Stage Summary:
+- Every un-openable site now yields an honest, actionable overlay (open directly / retry / reopen via proxy) instead of a broken page; reading, guidance, smart-map and instant-fill all verified working on real sites; login redirects keep their cookies. GitHub repo updated with all fixes.

@@ -236,6 +236,7 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"screen" | "docs" | "answers">("screen");
   const [reads, setReads] = useState<Record<string, ScreenRead>>({});
+  const [blocked, setBlocked] = useState<Record<string, { kind: "blocked" | "escaped"; url: string; title: string } | undefined>>({});
   const [guide, setGuide] = useState<Record<string, string>>({});
   const [guideBusy, setGuideBusy] = useState(false);
   const [mapBusy, setMapBusy] = useState(false);
@@ -306,6 +307,7 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
   // ── navigation ──
   const navigate = useCallback(
     (tabId: string, url: string, push = true) => {
+      setBlocked((b) => (b[tabId] ? { ...b, [tabId]: undefined } : b));
       setTabs((ts) =>
         ts.map((t) => {
           if (t.id !== tabId) return t;
@@ -473,12 +475,27 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
       if (!ifr) return;
       let realUrl = "";
       let title = "";
+      let blockedInfo: { kind: "blocked" | "escaped"; url: string; title: string } | undefined;
       try {
+        const doc = ifr.contentDocument;
         realUrl = unwrapUrl(ifr.contentWindow?.location.href ?? "");
-        title = ifr.contentDocument?.title || hostOf(realUrl);
+        title = doc?.title || hostOf(realUrl);
+        const errEl = doc?.getElementById("sg-err");
+        if (errEl) {
+          blockedInfo = {
+            kind: "blocked",
+            url: errEl.getAttribute("data-sg-real") || realUrl,
+            title: errEl.getAttribute("data-sg-title") || "This site can't be opened through the Co-Pilot",
+          };
+        } else if (doc && doc.location?.host && doc.location.host !== window.location.host) {
+          // the page JS-redirected itself out of the proxy
+          blockedInfo = { kind: "escaped", url: unwrapUrl(doc.location.href), title: doc.title || "" };
+        }
       } catch {
-        /* cross-origin — keep old */
+        // document fully cross-origin — the site escaped the proxy
+        blockedInfo = { kind: "escaped", url: realUrl, title: title };
       }
+      setBlocked((b) => ({ ...b, [tabId]: blockedInfo }));
       setTabs((ts) =>
         ts.map((t) => (t.id === tabId ? { ...t, loading: false, ...(realUrl ? { url: realUrl, title } : {}) } : t))
       );
@@ -594,7 +611,10 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
   const askGuide = async () => {
     if (!active) return;
     const read = runRead(active.id) ?? reads[active.id];
-    if (!read) return;
+    if (!read) {
+      toast({ title: "Can't read this page", description: "It may block embedding — try Reload, or open it directly.", variant: "destructive" });
+      return;
+    }
     setPanelOpen(true);
     setPanelTab("screen");
     setGuideBusy(true);
@@ -620,7 +640,10 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
   const smartMap = async () => {
     if (!active) return;
     const read = runRead(active.id) ?? reads[active.id];
-    if (!read) return;
+    if (!read) {
+      toast({ title: "Can't read this page", description: "It may block embedding — try Reload, or open it directly.", variant: "destructive" });
+      return;
+    }
     setMapBusy(true);
     try {
       const res = await fetch("/api/browse-assist", {
@@ -858,6 +881,55 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
                     bookmarks={browserBookmarks}
                     history={browserHistory}
                   />
+                )}
+                {t.url && blocked[t.id] && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl">
+                      <div className="mb-2 flex items-center gap-2">
+                        <ShieldAlert className="h-5 w-5 text-destructive" />
+                        <p className="text-sm font-bold text-foreground">
+                          {blocked[t.id]!.kind === "escaped" ? "The site left the Co-Pilot" : blocked[t.id]!.title || "This site can't be opened through the Co-Pilot"}
+                        </p>
+                      </div>
+                      <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+                        {blocked[t.id]!.kind === "escaped"
+                          ? "This page redirected itself outside the Co-Pilot browser. Reopen it through the co-pilot to keep reading and auto-filling, or open it directly."
+                          : "This portal refuses automated access (a security wall) or is unreachable from our servers. Open it in your own browser — your vault, answers and checklist stay ready here beside you."}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => window.open(blocked[t.id]!.url, "_blank", "noopener,noreferrer")}
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Open site directly
+                        </Button>
+                        {blocked[t.id]!.kind === "escaped" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 gap-1 text-xs"
+                            onClick={() => navigate(t.id, blocked[t.id]!.url)}
+                          >
+                            <RotateCw className="h-3.5 w-3.5" /> Reopen through Co-Pilot
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 gap-1 text-xs"
+                            onClick={() => {
+                              setBlocked((b) => ({ ...b, [t.id]: undefined }));
+                              setReloadKeys((rk) => ({ ...rk, [t.id]: (rk[t.id] ?? 0) + 1 }));
+                              navigate(t.id, t.url, false);
+                            }}
+                          >
+                            <RotateCw className="h-3.5 w-3.5" /> Try again
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
