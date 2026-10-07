@@ -36,7 +36,7 @@ import {
 import { buildEmail, type EmailDraft } from "@/lib/email-templates";
 import { flagEmoji, kindMeta } from "@/components/opportunity-card";
 import { EmailSendDialog } from "@/components/copilot/email-send-dialog";
-import { CopilotBrowser } from "@/components/copilot/browser/copilot-browser";
+import { openCopilotBrowser } from "@/components/copilot/browser/copilot-browser";
 import {
   CalendarClock,
   ChevronDown,
@@ -65,7 +65,6 @@ export function SubmissionKits() {
   const [emailTitle, setEmailTitle] = useState<string | undefined>(undefined);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState<string | null>(null);
-  const [browserApp, setBrowserApp] = useState<CopilotApplication | null>(null);
 
   // Kits keep themselves in sync with the vault: a checklist item is done when
   // the user ticked it OR a matching document already exists in the vault.
@@ -277,7 +276,7 @@ export function SubmissionKits() {
 
                 {/* actions */}
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" className="gap-1.5 font-semibold" onClick={() => setBrowserApp(app)}>
+                  <Button size="sm" className="gap-1.5 font-semibold" onClick={() => openCopilotBrowser(app.officialUrl, app.name, app.slug)}>
                     <Globe2 className="h-3.5 w-3.5" /> Open portal in Co-Pilot Browser
                   </Button>
                   <a href={app.officialUrl} target="_blank" rel="noopener noreferrer">
@@ -401,15 +400,6 @@ export function SubmissionKits() {
       })}
 
       <EmailSendDialog open={emailOpen} onOpenChange={setEmailOpen} draft={draft} title={emailTitle} />
-      <CopilotBrowser
-        open={!!browserApp}
-        onOpenChange={(o) => {
-          if (!o) setBrowserApp(null);
-        }}
-        initialUrl={browserApp?.officialUrl}
-        appName={browserApp?.name}
-        appSlug={browserApp?.slug}
-      />
     </div>
   );
 }

@@ -116,3 +116,19 @@ Stage Summary:
 - Deliverable: runnable Next.js app (port 3000), / and /online; Co-Pilot Browser fully functional (tabs/history/bookmarks, screen reading, instant+AI autofill, docs panel with download-to-upload, needs-you alerts for CAPTCHA/uploads/passwords/payments, per-tab login cookies, graceful failure for blocking sites); 127 curated opportunities incl. 34 trusted certificates (Harvard/MIT/UMich/Illinois/IATA/ISC2/Google/Meta/IBM/Cisco/Microsoft/AWS/World Bank).
 - Key files changed: src/lib/copilot-store.ts, src/components/copilot/browser/copilot-browser.tsx, src/app/api/opportunities/route.ts, db/custom.db (re-seeded 127).
 - Honest limits (by design): file uploads require the user to pick files (browser security), passwords/CAPTCHA/payments always need the user, sites with hard bot-protection show a friendly error page with a direct-escape link.
+
+---
+Task ID: 6
+Agent: Super Z (main agent)
+Task: User feedback — "the copilot browser should be open in a new tab that takes the default desktop or mobile size of the system it is opened on, not some small box browser squeezing everything in it."
+
+Work Log:
+- Diagnosed: the browser was rendered inside a shadcn Dialog; DialogContent's responsive default (sm:max-w-lg) overrode the custom max-w on desktop, squeezing it into a small centered box.
+- Refactored CopilotBrowser from a Dialog into a full-viewport page component (fixed inset-0 flex-col, no dialog chrome, native window size on any device) with props initialUrl/appName/appSlug; removed all open/onOpenChange dialog plumbing, the follow-initialUrl effect and lastInitialRef; co-pilot panel auto-opens on desktop (≥1024px); Close button calls window.close() with a home fallback (tab opened by URL directly); added a "← ScholarGlobe" link and document.title in the tab.
+- NEW route /copilot-browser (src/app/copilot-browser/page.tsx) reading ?u=&name=&app= via useSearchParams inside Suspense (canonical Next pattern; first attempt with setState-in-effect failed the react-hooks/set-state-in-effect lint rule).
+- NEW exported helper openCopilotBrowser(url?, appName?, appSlug?) → window.open('/copilot-browser?...', '_blank', 'noopener'); launch sites switched: opportunity-card (2 buttons), submission-kits ("Open portal in Co-Pilot Browser"), apply-copilot overview Launch card (text now says "Opens in its own full-size browser tab"); removed all three components' dialog state/render code.
+- Triple check: eslint clean, tsc 0 src errors; agent-browser e2e — clicking "Open in Co-Pilot Browser" opens REAL new tab (agent-browser tab shows t2 = /copilot-browser?u=...) at native size: desktop root 1280×577 == innerW/H exactly, no [role=dialog]; mobile 390×844 viewport → root 390×844 fullBleed:true; portal (Commonwealth) loads in iframe; screen read 12 fields on httpbin form; Instant fill wrote phone +233 24 123 4567, email kwame.mensah@example.com AND name "Kwame Mensah" (improved fullName regex catches "Customer name"); Close button + ScholarGlobe link present; console clean, zero page errors. (Note: fresh agent-browser instance had empty localStorage — profile re-injected for the fill test; end users' profiles persist per browser.)
+
+Stage Summary:
+- Deliverable: runnable Next.js app; Co-Pilot Browser now opens as a real new browser tab at the native desktop/mobile window size (no dialog), keeping all features: tabs, history, bookmarks, screen reading, instant + AI autofill, docs panel, needs-you alerts.
+- Key files: src/app/copilot-browser/page.tsx (new), src/components/copilot/browser/copilot-browser.tsx (dialog → full-viewport page + openCopilotBrowser helper), src/components/opportunity-card.tsx, src/components/copilot/{apply-copilot,submission-kits}.tsx (window.open launch sites).

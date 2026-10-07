@@ -15,7 +15,7 @@ import { ApplicationWizard } from "@/components/copilot/application-wizard";
 import { DocumentVault } from "@/components/copilot/document-vault";
 import { EmailCenter } from "@/components/copilot/email-center";
 import { SubmissionKits } from "@/components/copilot/submission-kits";
-import { CopilotBrowser } from "@/components/copilot/browser/copilot-browser";
+import { openCopilotBrowser } from "@/components/copilot/browser/copilot-browser";
 import { flagEmoji } from "@/components/opportunity-card";
 import {
   CalendarClock,
@@ -30,7 +30,6 @@ import {
 
 export function ApplyCopilot() {
   const { apps, docs, profileCompletion } = useCopilot();
-  const [browserOpen, setBrowserOpen] = useState(false);
 
   const nextDeadlines = useMemo(
     () =>
@@ -76,7 +75,7 @@ export function ApplyCopilot() {
         {/* Co-Pilot browser launch */}
         <button
           type="button"
-          onClick={() => setBrowserOpen(true)}
+          onClick={() => openCopilotBrowser()}
           className="group mt-4 flex w-full items-center gap-3 rounded-2xl border border-primary/30 bg-gradient-to-r from-primary/10 via-transparent to-fuchsia-500/5 p-4 text-left transition hover:border-primary/50 hover:shadow-md"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md transition group-hover:scale-105">
@@ -85,8 +84,9 @@ export function ApplyCopilot() {
           <span className="min-w-0">
             <span className="block text-sm font-bold text-foreground">Open the Co-Pilot Browser</span>
             <span className="block text-[11px] leading-snug text-muted-foreground">
-              A real browser with tabs, history and bookmarks built for applications — it reads each portal page, pre-fills
-              your details from the vault, and only interrupts you for CAPTCHAs, uploads, passwords and payments.
+              Opens in its own full-size browser tab — it takes the native size of your desktop or phone. It reads each
+              portal page, pre-fills your details from the vault, and only interrupts you for CAPTCHAs, uploads,
+              passwords and payments.
             </span>
           </span>
           <span className="ml-auto hidden shrink-0 rounded-full bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground sm:block">
@@ -150,7 +150,6 @@ export function ApplyCopilot() {
       <TabsContent value="wizard" className="mt-4"><ApplicationWizard /></TabsContent>
       <TabsContent value="kits" className="mt-4"><SubmissionKits /></TabsContent>
       <TabsContent value="emails" className="mt-4"><EmailCenter /></TabsContent>
-      <CopilotBrowser open={browserOpen} onOpenChange={setBrowserOpen} />
     </Tabs>
   );
 }

@@ -12,7 +12,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -78,11 +77,24 @@ interface ScreenRead {
 }
 
 export interface CopilotBrowserProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   initialUrl?: string;
   appName?: string;
   appSlug?: string;
+}
+
+/**
+ * Open the Co-Pilot Browser in a REAL new browser tab. The tab renders the
+ * /copilot-browser route full-viewport, so it always takes the native
+ * desktop or mobile window size — never a squeezed dialog box.
+ */
+export function openCopilotBrowser(url?: string, appName?: string, appSlug?: string) {
+  if (typeof window === "undefined") return;
+  const sp = new URLSearchParams();
+  if (url) sp.set("u", url);
+  if (appName) sp.set("name", appName);
+  if (appSlug) sp.set("app", appSlug);
+  const qs = sp.toString();
+  window.open(`/copilot-browser${qs ? `?${qs}` : ""}`, "_blank", "noopener");
 }
 
 // ── helpers ──────────────────────────────────────────────────────────
@@ -214,7 +226,7 @@ function matchBank(field: PageField, bank: BankEntry[]): BankEntry | null {
 
 // ── component ────────────────────────────────────────────────────────
 
-export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlug }: CopilotBrowserProps) {
+export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserProps) {
   const { profile, docs, apps, downloadDoc, pushBrowserHistory, browserHistory, browserBookmarks, addBrowserBookmark, removeBrowserBookmark, clearBrowserHistory } = useCopilot();
   const { toast } = useToast();
 
@@ -234,16 +246,22 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
   const focusRef = useRef<{ tabId: string; el: HTMLElement } | null>(null);
   const trackedDocs = useRef<WeakSet<Document>>(new WeakSet());
   const initedRef = useRef(false);
-  const lastInitialRef = useRef<string | undefined>(undefined);
 
   const app = useMemo(() => (appSlug ? apps.find((a) => a.slug === appSlug) : undefined), [apps, appSlug]);
   const active = tabs.find((t) => t.id === activeId) ?? null;
   const activeRead: ScreenRead | null = active ? reads[active.id] ?? null : null;
 
-  // ── init tabs on first open ──
+  // ── init tabs on first mount (page is mounted inside its own real tab) ──
   useEffect(() => {
-    if (!open || initedRef.current) return;
+    if (initedRef.current) return;
     initedRef.current = true;
+    document.title = appName ? `Co-Pilot Browser — ${appName}` : "Co-Pilot Browser — ScholarGlobe";
+    // open the co-pilot panel by default on desktop screens
+    try {
+      if (window.innerWidth >= 1024) setPanelOpen(true);
+    } catch {
+      /* noop */
+    }
     let restored: BrowserTab[] = [];
     try {
       const saved = JSON.parse(window.localStorage.getItem(TABS_LS) ?? "[]") as { url: string; title: string }[];
@@ -271,29 +289,10 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
     setTabs(restored);
     setActiveId(restored[0].id);
     setAddr(restored[0].url === "" ? "" : restored[0].url);
-  }, [open, initialUrl, appName]);
-
-  // follow a NEW initialUrl while open (e.g. another kit's portal)
-  useEffect(() => {
-    if (!open || !initedRef.current) return;
-    if (initialUrl && initialUrl !== lastInitialRef.current) {
-      lastInitialRef.current = initialUrl;
-      setTabs((ts) => {
-        const existing = ts.find((t) => t.url === initialUrl);
-        if (existing) {
-          setActiveId(existing.id);
-          return ts;
-        }
-        const nt: BrowserTab = { id: uid(), url: initialUrl, title: appName || hostOf(initialUrl), loading: true, history: [initialUrl], hIdx: 0 };
-        setActiveId(nt.id);
-        return [...ts, nt];
-      });
-    }
-  }, [open, initialUrl, appName]);
+  }, [initialUrl, appName]);
 
   // persist tab urls
   useEffect(() => {
-    if (!open) return;
     try {
       window.localStorage.setItem(
         TABS_LS,
@@ -302,7 +301,7 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
     } catch {
       /* noop */
     }
-  }, [tabs, open]);
+  }, [tabs]);
 
   // ── navigation ──
   const navigate = useCallback(
@@ -478,7 +477,6 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
 
   // ── injected-script messages (SPA nav, new tabs) ──
   useEffect(() => {
-    if (!open) return;
     const onMsg = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
       const d = e.data as { source?: string; type?: string; url?: string; title?: string };
@@ -495,7 +493,7 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [open, pushBrowserHistory]);
+  }, [pushBrowserHistory]);
 
   // ── autofill ──
   const bank = useMemo(() => buildBank(profile as unknown as Record<string, unknown>, app), [profile, app]);
@@ -674,16 +672,10 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
       desc: "Check the amount carefully. If a fee waiver applies, send the waiver email from the kit first.",
     });
 
-  // ── render ──
+  // ── render (full-viewport page — takes the native window size of the device) ──
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-[100vw] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden rounded-none border-0 p-0"
-        aria-describedby={undefined}
-      >
-        <DialogTitle className="sr-only">Co-Pilot Browser{appName ? ` — ${appName}` : ""}</DialogTitle>
-        {/* ── tab strip ── */}
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-background text-foreground">
+      {/* ── tab strip ── */}
         <div className="flex h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border bg-secondary/70 px-2">
           {tabs.map((t) => (
             <button
@@ -729,8 +721,26 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
                 🎯 {appName}
               </Badge>
             )}
-            <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={() => onOpenChange(false)}>
-              Close browser <X className="h-3 w-3" />
+            <a
+              href="/"
+              className="hidden h-7 items-center gap-1 rounded-lg px-2 text-[11px] font-semibold text-muted-foreground transition hover:bg-background/60 hover:text-foreground sm:flex"
+              title="Back to ScholarGlobe"
+            >
+              <Home className="h-3 w-3" /> ScholarGlobe
+            </a>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={() => {
+                window.close();
+                // if the tab refuses to close (opened by URL directly), fall back home
+                setTimeout(() => {
+                  if (!window.closed) window.location.href = "/";
+                }, 250);
+              }}
+            >
+              Close <X className="h-3 w-3" />
             </Button>
           </div>
         </div>
@@ -1130,8 +1140,7 @@ export function CopilotBrowser({ open, onOpenChange, initialUrl, appName, appSlu
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 }
 

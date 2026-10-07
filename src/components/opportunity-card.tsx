@@ -15,7 +15,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useCopilot } from "@/lib/copilot-store";
-import { CopilotBrowser } from "@/components/copilot/browser/copilot-browser";
+import { openCopilotBrowser } from "@/components/copilot/browser/copilot-browser";
 import {
   BadgeCheck,
   BookOpenCheck,
@@ -174,7 +174,6 @@ export function statusDotColor(status: string): string {
 
 export function OpportunityCard({ op, originCountry }: { op: Opportunity; originCountry?: string }) {
   const [open, setOpen] = useState(false);
-  const [browserOpen, setBrowserOpen] = useState(false);
   const { toast } = useToast();
   const { addApplication, apps } = useCopilot();
   const tracked = apps.some((a) => a.slug === op.slug);
@@ -465,7 +464,7 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
                 Open official website <ExternalLink className="h-3.5 w-3.5" />
               </a>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setBrowserOpen(true)}>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => openCopilotBrowser(op.officialUrl, op.name, op.slug)}>
                   <Globe2 className="h-3.5 w-3.5" /> Open in Co-Pilot Browser
                 </Button>
                 <Button size="sm" variant="outline" onClick={addToCopilot} className="gap-1.5" disabled={tracked}>
@@ -491,20 +490,13 @@ export function OpportunityCard({ op, originCountry }: { op: Opportunity; origin
           size="sm"
           variant="ghost"
           className="gap-0.5 text-muted-foreground hover:text-primary"
-          onClick={() => setBrowserOpen(true)}
+          onClick={() => openCopilotBrowser(op.officialUrl, op.name, op.slug)}
           aria-label="Open in Co-Pilot Browser"
           title="Open in Co-Pilot Browser — autofill + screen reading"
         >
           <Globe2 className="h-4 w-4" />
         </Button>
       </CardFooter>
-      <CopilotBrowser
-        open={browserOpen}
-        onOpenChange={setBrowserOpen}
-        initialUrl={op.officialUrl}
-        appName={op.name}
-        appSlug={op.slug}
-      />
     </Card>
   );
 }
