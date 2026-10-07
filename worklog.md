@@ -132,3 +132,21 @@ Work Log:
 Stage Summary:
 - Deliverable: runnable Next.js app; Co-Pilot Browser now opens as a real new browser tab at the native desktop/mobile window size (no dialog), keeping all features: tabs, history, bookmarks, screen reading, instant + AI autofill, docs panel, needs-you alerts.
 - Key files: src/app/copilot-browser/page.tsx (new), src/components/copilot/browser/copilot-browser.tsx (dialog → full-viewport page + openCopilotBrowser helper), src/components/opportunity-card.tsx, src/components/copilot/{apply-copilot,submission-kits}.tsx (window.open launch sites).
+
+---
+Task ID: 7
+Agent: Super Z (main agent)
+Task: (a) Push entire project to the user's GitHub; (b) re-verify the new-tab Co-Pilot browser end-to-end.
+
+Work Log:
+- Verified token (user: moseskumador146-coder), created repo "scholarglobe" via GitHub API, added remote, pushed main (225 files). Confirmed .env holds only a local DATABASE_URL (no secrets) and .gitignore excludes node_modules/.next. Repo: https://github.com/moseskumador146-coder/scholarglobe
+- Re-ran full E2E on the committed new-tab browser: entry button opens REAL new tab (/copilot-browser?u=&name=&app=), container 1440x900 == native viewport, 0 dialogs, portal loads via proxy, tab session restores across reloads, app badge (🎯) carried via query param.
+- BUG FOUND & FIXED (stale screen reads): tabs restored/loading while HIDDEN got a 0-field read (hidden iframe = 0x0 rects) which was then cached forever; "Instant fill" preferred the cached read, so restored tabs reported "0 FIELDS FOUND" and filled nothing.
+  1) readScreen now returns null when the iframe is hidden (rect < 40px) — no more garbage reads.
+  2) New effect re-reads the active tab 120ms after every activeId change — panel/alerts always reflect the visible page.
+  3) fillAll / askGuide / smartMap now prefer a FRESH read over the cache (runRead(active.id) ?? reads[active.id]).
+- Post-fix E2E: httpbin form auto-detected 12 fields on tab activation; Instant fill wrote name "Kwame Mensah", phone "+233 24 123 4567", email — verified in the iframe DOM and a11y tree. Mobile 390x844: container exact, no horizontal overflow, 0 dialogs. Dark + light themes verified via sg-theme class strategy (screenshots in scripts/newtab-*.png). Console 0 errors; eslint clean; tsc 0 src errors (only pre-existing sandbox examples/skills errors remain, unrelated to the app).
+
+Stage Summary:
+- Project live on GitHub (moseskumador146-coder/scholarglobe, main).
+- Co-Pilot browser new-tab experience verified end-to-end; fixed a real stale-read bug that broke autofill on restored/background tabs. App state, autofill, alerts and AI assists now always operate on the currently visible page.

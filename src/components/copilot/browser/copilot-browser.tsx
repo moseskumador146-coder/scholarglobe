@@ -379,7 +379,11 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
     (tabId: string): ScreenRead | null => {
       const ifr = iframeRefs.current[tabId];
       const doc = ifr?.contentDocument;
-      if (!doc || !doc.body) return null;
+      if (!ifr || !doc || !doc.body) return null;
+      // A hidden tab's document has no layout — every rect reads 0×0, so a read
+      // taken now would wrongly report zero visible fields. Read only when shown.
+      const frBox = ifr.getBoundingClientRect();
+      if (frBox.width < 40 || frBox.height < 40) return null;
       try {
         const els = Array.from(doc.querySelectorAll("input, textarea, select")) as HTMLElement[];
         const fields: PageField[] = [];
@@ -452,6 +456,15 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
     },
     [readScreen]
   );
+
+  // ── re-read when a tab becomes active ──
+  // Tabs that load while hidden (restored sessions, background tabs) have no
+  // valid read — readScreen skips hidden iframes. Refresh the moment it is shown.
+  useEffect(() => {
+    if (!activeId) return;
+    const tm = setTimeout(() => runRead(activeId), 120);
+    return () => clearTimeout(tm);
+  }, [activeId, runRead]);
 
   // ── iframe load handler ──
   const handleLoad = useCallback(
@@ -532,7 +545,7 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
 
   const fillAll = () => {
     if (!active) return;
-    const read = reads[active.id] ?? runRead(active.id);
+    const read = runRead(active.id) ?? reads[active.id];
     if (!read) {
       toast({ title: "Could not read this page", description: "Try the Reload button, then Read again." });
       return;
@@ -580,7 +593,7 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
   // ── AI assists ──
   const askGuide = async () => {
     if (!active) return;
-    const read = reads[active.id] ?? runRead(active.id);
+    const read = runRead(active.id) ?? reads[active.id];
     if (!read) return;
     setPanelOpen(true);
     setPanelTab("screen");
@@ -606,7 +619,7 @@ export function CopilotBrowser({ initialUrl, appName, appSlug }: CopilotBrowserP
 
   const smartMap = async () => {
     if (!active) return;
-    const read = reads[active.id] ?? runRead(active.id);
+    const read = runRead(active.id) ?? reads[active.id];
     if (!read) return;
     setMapBusy(true);
     try {
